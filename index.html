@@ -32,14 +32,17 @@
   section.view{display:none;}
   section.view.active{display:block; animation:fade .18s ease;}
   @keyframes fade{from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:none}}
+
   .card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px;}
   .card h2{font-size:14px; margin:0 0 12px; color:var(--muted); font-weight:600;}
   .card-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
   .card-row h2{margin:0;}
+
   .stats{display:flex; gap:10px; margin-bottom:14px;}
   .stat{flex:1; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px 14px;}
   .stat .n{font-size:20px; font-weight:700;}
   .stat .l{font-size:11px; color:var(--muted); margin-top:2px;}
+
   .form-row{display:flex; flex-direction:column; gap:10px; margin-bottom:10px;}
   input, select, textarea{background:var(--surface-2); border:1px solid var(--line); color:var(--text);
     padding:12px; border-radius:10px; font-size:15px; width:100%; font-family:inherit;}
@@ -54,6 +57,7 @@
   button.ghost{background:none; border:1px solid var(--line); color:var(--muted); padding:9px; border-radius:10px; font-size:13px; width:100%; font-family:inherit;}
   .add-toggle{display:flex; align-items:center; justify-content:center; gap:6px; color:var(--amber);
     font-weight:600; font-size:14px; padding:10px; margin-bottom:10px;}
+
   .item{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--line);}
   .item:last-child{border-bottom:none;}
   .chk{width:26px; height:26px; min-width:26px; border-radius:50%; border:2px solid var(--muted);
@@ -72,6 +76,7 @@
   .icon-btn.edit{color:var(--mint);}
   .row-actions{display:flex; gap:2px; flex-shrink:0;}
   .empty{text-align:center; color:var(--muted); font-size:13px; padding:24px 10px;}
+
   /* subtasks */
   .subtask-toggle{font-size:11px; color:var(--mint); margin-top:3px;}
   .subtasks{margin:8px 0 0 0; padding-left:0;}
@@ -82,10 +87,12 @@
   .sub-add{display:flex; gap:6px; margin-top:6px;}
   .sub-add input{padding:8px 10px; font-size:13px;}
   .sub-add button{background:var(--surface-2); border:1px solid var(--line); color:var(--mint); border-radius:8px; padding:0 12px; font-size:13px;}
+
   /* toolbar */
   .toolbar{display:flex; gap:8px; margin-bottom:12px;}
   .toolbar input{flex:1.4;}
   .toolbar select{flex:1;}
+
   /* habits */
   .month-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
   .month-nav .lbl{font-weight:700; font-size:15px; text-transform:capitalize;}
@@ -119,12 +126,14 @@
   .note-item{display:flex; justify-content:space-between; gap:8px; font-size:12px; padding:5px 0; border-bottom:1px solid var(--line);}
   .note-item:last-child{border-bottom:none;}
   .note-item .nd{color:var(--muted); min-width:70px;}
+
   /* charts */
   .chart-wrap{display:flex; align-items:center; gap:16px;}
   .legend{flex:1; display:flex; flex-direction:column; gap:8px;}
   .legend-item{display:flex; align-items:center; gap:8px; font-size:12.5px;}
   .legend-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
   .legend-val{margin-left:auto; color:var(--muted);}
+
   /* budgets */
   .budget-row{padding:10px 0; border-bottom:1px solid var(--line);}
   .budget-row:last-child{border-bottom:none;}
@@ -132,6 +141,7 @@
   .budget-top .name{font-weight:600;}
   .budget-top .amt{color:var(--muted);}
   .budget-top input{width:78px; padding:6px 8px; font-size:12px; text-align:right;}
+
   /* piggybanks */
   .pb-row{padding:12px 0; border-bottom:1px solid var(--line);}
   .pb-row:last-child{border-bottom:none;}
@@ -144,6 +154,7 @@
   .pb-actions{display:flex; gap:8px; margin-top:8px;}
   .pb-actions input{width:78px; padding:6px 8px; font-size:12px; text-align:right; flex:none;}
   .pb-actions button{flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--mint); border-radius:8px; padding:6px; font-size:12px; font-family:inherit;}
+
   nav.tabbar{position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto;
     background:rgba(22,51,43,.92); backdrop-filter:blur(10px); border-top:1px solid var(--line);
     display:flex; padding-bottom:env(safe-area-inset-bottom);}
@@ -161,6 +172,7 @@
     <h1 id="viewTitle">Задачи</h1>
     <div class="date" id="todayLabel"></div>
   </header>
+
   <main>
     <!-- TASKS -->
     <section class="view active" id="view-tasks">
@@ -169,6 +181,7 @@
         <div class="stat"><div class="n" id="t-done">0</div><div class="l">готово</div></div>
         <div class="stat"><div class="n" id="t-pct">0%</div><div class="l">прогресс</div></div>
       </div>
+
       <div class="card">
         <h2>Статусы задач</h2>
         <div class="chart-wrap">
@@ -176,6 +189,7 @@
           <div class="legend" id="t-legend"></div>
         </div>
       </div>
+
       <div class="toolbar">
         <input id="t-search" placeholder="Поиск задач..." oninput="renderTasks()">
         <select id="t-filter-cat" onchange="renderTasks()"><option value="">Все категории</option></select>
@@ -187,6 +201,7 @@
           <option value="due">Сорт.: по дедлайну</option>
         </select>
       </div>
+
       <div class="add-toggle" onclick="toggleForm('t-form')">+ Добавить задачу</div>
       <div class="card" id="t-form" style="display:none">
         <div class="form-row">
@@ -211,8 +226,10 @@
           <button class="primary" id="t-submit-btn" onclick="submitTask()">Добавить</button>
         </div>
       </div>
+
       <div class="card" id="t-list"></div>
     </section>
+
     <!-- HABITS -->
     <section class="view" id="view-habits">
       <div class="card">
@@ -223,6 +240,7 @@
         </div>
         <div class="cal-grid" id="h-overview-cal"></div>
       </div>
+
       <div class="add-toggle" onclick="toggleForm('h-form')">+ Добавить привычку</div>
       <div class="card" id="h-form" style="display:none">
         <div class="form-row">
@@ -230,8 +248,10 @@
           <button class="primary" onclick="addHabit()">Добавить</button>
         </div>
       </div>
+
       <div class="card" id="h-list"></div>
     </section>
+
     <!-- FINANCE -->
     <section class="view" id="view-fin">
       <div class="month-nav" style="margin-bottom:12px;">
@@ -239,11 +259,13 @@
         <div class="lbl" id="f-month-label"></div>
         <button onclick="shiftFinMonth(1)">›</button>
       </div>
+
       <div class="stats">
         <div class="stat"><div class="n" id="f-income" style="color:var(--mint)">0</div><div class="l">доходы</div></div>
         <div class="stat"><div class="n" id="f-expense" style="color:var(--coral)">0</div><div class="l">расходы</div></div>
         <div class="stat"><div class="n" id="f-balance">0</div><div class="l">баланс</div></div>
       </div>
+
       <div class="card">
         <h2>Расходы по категориям</h2>
         <div class="chart-wrap">
@@ -251,6 +273,7 @@
           <div class="legend" id="f-legend"></div>
         </div>
       </div>
+
       <div class="card">
         <h2>Лимиты бюджета</h2>
         <div id="f-budgets"></div>
@@ -260,6 +283,7 @@
         </div>
         <button class="ghost" style="margin-top:8px;" onclick="addBudget()">+ Добавить лимит</button>
       </div>
+
       <div class="card">
         <h2>💰 Копилки (цели сбережений)</h2>
         <div id="f-piggybanks"></div>
@@ -269,6 +293,7 @@
         </div>
         <button class="ghost" style="margin-top:8px;" onclick="addPiggybank()">+ Добавить копилку</button>
       </div>
+
       <div class="add-toggle" onclick="toggleForm('f-form')">+ Добавить операцию</div>
       <div class="card" id="f-form" style="display:none">
         <div class="form-row">
@@ -287,8 +312,10 @@
           <button class="primary" id="f-submit-btn" onclick="submitTx()">Добавить</button>
         </div>
       </div>
+
       <div class="card" id="f-list"></div>
     </section>
+
     <!-- MORE / BACKUP -->
     <section class="view" id="view-more">
       <div class="card">
@@ -305,6 +332,7 @@
       </div>
     </section>
   </main>
+
   <nav class="tabbar">
     <button class="active" data-view="tasks" onclick="switchView('tasks')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
@@ -324,6 +352,7 @@
     </button>
   </nav>
 </div>
+
 <script>
 /* ---------- date helpers (local, no UTC drift) ---------- */
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -333,6 +362,7 @@ function addDays(iso, n){ const d = new Date(iso+'T00:00:00'); d.setDate(d.getDa
 function addMonthsIso(iso, n){ const d = new Date(iso+'T00:00:00'); d.setMonth(d.getMonth()+n); return isoLocal(d); }
 function monthLabel(d){ return d.toLocaleDateString('ru-RU', {month:'long', year:'numeric'}); }
 function isoMonthOf(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; }
+
 /* ---------- storage ---------- */
 const KEY = 'poryadok_v2';
 function migrate(s){
@@ -381,8 +411,10 @@ const seed = migrate({
     {id:3, name:'✈️ Отпуск', goal:300000, saved:50000}
   ]
 });
+
 let state = load() || seed;
 function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+
 /* ---------- nav ---------- */
 const titles = {tasks:'Задачи', habits:'Привычки', fin:'Финансы', more:'Ещё'};
 function switchView(v){
@@ -398,6 +430,7 @@ function toggleForm(id){
 function escapeHTML(s){
   return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
+
 /* ---------- charts (vanilla SVG) ---------- */
 function donut(data, size=104){
   const total = data.reduce((s,d)=>s+d.value,0);
@@ -425,12 +458,14 @@ function legendHTML(data){
     return `<div class="legend-item"><span class="legend-dot" style="background:${d.color}"></span>${escapeHTML(d.label)}<span class="legend-val">${pct}%</span></div>`;
   }).join('');
 }
+
 /* ================= TASKS ================= */
 const PRIO_CLASS = {'Высокий':'high','Средний':'med','Низкий':'low'};
 const PRIO_ORDER = {'Высокий':0,'Средний':1,'Низкий':2};
 const RECUR_LABEL = {daily:'каждый день', weekly:'каждую неделю', monthly:'каждый месяц'};
 let editingTaskId = null;
 let expandedTasks = new Set();
+
 function fillTaskCategoryFilter(){
   const sel = document.getElementById('t-filter-cat');
   const cur = sel.value;
@@ -438,6 +473,7 @@ function fillTaskCategoryFilter(){
   sel.innerHTML = '<option value="">Все категории</option>' + cats.map(c=>`<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');
   sel.value = cats.includes(cur) ? cur : '';
 }
+
 function submitTask(){
   const text = document.getElementById('t-input-text').value.trim();
   if(!text) return;
@@ -446,6 +482,7 @@ function submitTask(){
   const due = document.getElementById('t-input-due').value;
   const recurVal = document.getElementById('t-input-recur').value;
   const recur = recurVal ? {freq:recurVal} : null;
+
   if(editingTaskId){
     const t = state.tasks.find(x=>x.id===editingTaskId);
     Object.assign(t, {text, cat, prio, due, recur});
@@ -514,6 +551,7 @@ function delSubtask(taskId, subId){
   t.subtasks = t.subtasks.filter(x=>x.id!==subId);
   save(); renderTasks();
 }
+
 function filteredSortedTasks(){
   let arr = [...state.tasks];
   const q = (document.getElementById('t-search').value||'').toLowerCase().trim();
@@ -525,6 +563,7 @@ function filteredSortedTasks(){
   else if(sortMode==='due') arr.sort((a,b)=>(a.due||'9999-99-99').localeCompare(b.due||'9999-99-99'));
   return arr;
 }
+
 function renderTasks(){
   fillTaskCategoryFilter();
   const total = state.tasks.length;
@@ -534,6 +573,7 @@ function renderTasks(){
   document.getElementById('t-total').textContent = total;
   document.getElementById('t-done').textContent = done;
   document.getElementById('t-pct').textContent = total? Math.round(done/total*100)+'%' : '0%';
+
   const data = [
     {label:'Готово', value:done, color:'#5FD3BC'},
     {label:'В процессе', value:progress, color:'#F2B705'},
@@ -541,6 +581,7 @@ function renderTasks(){
   ];
   document.getElementById('t-donut').innerHTML = donut(data);
   document.getElementById('t-legend').innerHTML = legendHTML(data);
+
   const list = document.getElementById('t-list');
   const items = filteredSortedTasks();
   if(!items.length){ list.innerHTML = '<div class="empty">Ничего не найдено — измени фильтр или добавь задачу</div>'; return; }
@@ -584,8 +625,10 @@ function renderTasks(){
     </div>`;
   }).join('');
 }
+
 /* ================= HABITS ================= */
 let habitViewDate = new Date();
+
 function shiftHabitMonth(n){
   habitViewDate.setMonth(habitViewDate.getMonth()+n);
   renderHabits();
@@ -639,6 +682,7 @@ function delNote(habitId, date){
   delete h.notes[date];
   save(); renderHabits();
 }
+
 function weekRangeOf(date){
   const d = new Date(date);
   const dow = (d.getDay()+6)%7;
@@ -665,12 +709,15 @@ function calcStreaks(h){
   }
   return {current, best};
 }
+
 const DOW_LABELS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
 function renderHabits(){
   document.getElementById('h-month-label').textContent = monthLabel(habitViewDate);
   const y = habitViewDate.getFullYear(), m = habitViewDate.getMonth();
   const cells = monthMatrix(y, m);
   const today = todayISO();
+
   const overviewCal = document.getElementById('h-overview-cal');
   overviewCal.innerHTML = DOW_LABELS.map(l=>`<div class="cal-dow">${l}</div>`).join('') +
     cells.map(iso=>{
@@ -683,15 +730,18 @@ function renderHabits(){
       const isToday = iso===today ? 'today-ring' : '';
       return `<div class="cal-cell ${heat} ${isToday}">${parseInt(iso.slice(-2))}</div>`;
     }).join('');
+
   const list = document.getElementById('h-list');
   if(!state.habits.length){ list.innerHTML = '<div class="empty">Пока нет привычек — добавь первую</div>'; return; }
   const weekDays = weekRangeOf(new Date());
+
   list.innerHTML = state.habits.map(h=>{
     const streaks = calcStreaks(h);
     const weekCount = h.dates.filter(d=>weekDays.includes(d)).length;
     const goalPct = Math.min(100, Math.round(weekCount/h.goal*100));
     const notesOpen = expandedNotes.has(h.id);
     const notesEntries = Object.entries(h.notes).sort((a,b)=>b[0].localeCompare(a[0]));
+
     const calHTML = DOW_LABELS.map(l=>`<div class="cal-dow">${l}</div>`).join('') +
       cells.map(iso=>{
         if(!iso) return '<div class="cal-cell empty2"></div>';
@@ -700,6 +750,7 @@ function renderHabits(){
         const hasNote = h.notes[iso] ? '<div class="note-dot"></div>' : '';
         return `<div class="cal-cell ${on} ${isToday}" onclick="toggleHabitDay(${h.id},'${iso}')">${parseInt(iso.slice(-2))}${hasNote}</div>`;
       }).join('');
+
     return `<div class="habit-row">
       <div class="habit-top">
         <div>
@@ -708,6 +759,7 @@ function renderHabits(){
         </div>
         <div class="icon-btn" onclick="delHabit(${h.id})">✕</div>
       </div>
+
       <div class="goal-row">
         <span style="font-size:11px; color:var(--muted); white-space:nowrap;">Цель/нед.</span>
         <input type="number" min="1" max="7" value="${h.goal}" onchange="setHabitGoal(${h.id}, this.value)">
@@ -716,7 +768,9 @@ function renderHabits(){
         </div>
         <span style="font-size:11px; color:var(--muted); white-space:nowrap;">${weekCount}/${h.goal}</span>
       </div>
+
       <div class="habit-cal cal-grid">${calHTML}</div>
+
       <div class="notes-toggle" onclick="toggleNotes(${h.id})">📝 Заметки (${notesEntries.length}) ${notesOpen?'▲':'▼'}</div>
       ${notesOpen ? `
         <div class="notes-panel">
@@ -732,10 +786,12 @@ function renderHabits(){
     </div>`;
   }).join('');
 }
+
 /* ================= FINANCE ================= */
 const FIN_COLORS = ['#F2B705','#5FD3BC','#B79CED','#E4572E','#6FA8DC','#F29E4C'];
 let finViewDate = new Date();
 let editingTxId = null;
+
 function shiftFinMonth(n){
   finViewDate.setMonth(finViewDate.getMonth()+n);
   renderFin();
@@ -751,6 +807,7 @@ function submitTx(){
   const amt = parseFloat(document.getElementById('f-input-amt').value);
   if(!amt || amt<=0) return;
   const note = document.getElementById('f-input-note').value.trim();
+
   if(editingTxId){
     const t = state.tx.find(x=>x.id===editingTxId);
     Object.assign(t, {date, type, cat, amt, note});
@@ -779,6 +836,7 @@ function editTx(id){
   document.getElementById('f-form').scrollIntoView({behavior:'smooth', block:'center'});
 }
 function delTx(id){ state.tx = state.tx.filter(x=>x.id!==id); save(); renderFin(); }
+
 function addBudget(){
   const cat = document.getElementById('b-input-cat').value.trim();
   const limit = parseFloat(document.getElementById('b-input-limit').value);
@@ -794,6 +852,7 @@ function updateBudget(cat, val){
   save(); renderFin();
 }
 function delBudget(cat){ delete state.budgets[cat]; save(); renderFin(); }
+
 function addPiggybank(){
   const name = document.getElementById('pb-input-name').value.trim();
   const goal = parseFloat(document.getElementById('pb-input-goal').value);
@@ -805,8 +864,19 @@ function addPiggybank(){
 }
 function updatePiggybank(id, amount){
   const pb = state.piggybanks.find(x=>x.id===id);
-  if(!pb) return;
+  if(!pb || !amount) return;
+  amount = Math.abs(amount);
   pb.saved = Math.max(0, pb.saved + amount);
+  state.tx.push({id:Date.now(), date:todayISO(), type:'Расход', cat:'Копилки', amt:amount, note:pb.name});
+  save(); renderFin();
+}
+function withdrawPiggybank(id, amount){
+  const pb = state.piggybanks.find(x=>x.id===id);
+  if(!pb || !amount) return;
+  amount = Math.min(Math.abs(amount), pb.saved);
+  if(!amount) return;
+  pb.saved -= amount;
+  state.tx.push({id:Date.now(), date:todayISO(), type:'Доход', cat:'Копилки', amt:amount, note:'Возврат: '+pb.name});
   save(); renderFin();
 }
 function delPiggybank(id){
@@ -835,11 +905,13 @@ function renderPiggybanks(){
       <div class="pb-actions">
         <input type="number" id="pb-add-${pb.id}" placeholder="Сумма" inputmode="decimal">
         <button onclick="updatePiggybank(${pb.id}, parseFloat(document.getElementById('pb-add-${pb.id}').value)||0); document.getElementById('pb-add-${pb.id}').value='';">+</button>
+        <button style="color:var(--coral);" onclick="withdrawPiggybank(${pb.id}, parseFloat(document.getElementById('pb-add-${pb.id}').value)||0); document.getElementById('pb-add-${pb.id}').value='';">−</button>
         <div class="icon-btn" onclick="delPiggybank(${pb.id})" style="padding:6px; color:var(--coral);">✕</div>
       </div>
     </div>`;
   }).join('');
 }
+
 function renderFin(){
   document.getElementById('f-month-label').textContent = monthLabel(finViewDate);
   const monthTx = txInView();
@@ -848,11 +920,13 @@ function renderFin(){
   document.getElementById('f-income').textContent = income.toLocaleString('ru-RU');
   document.getElementById('f-expense').textContent = expense.toLocaleString('ru-RU');
   document.getElementById('f-balance').textContent = (income-expense).toLocaleString('ru-RU');
+
   const byCat = {};
   monthTx.filter(t=>t.type==='Расход').forEach(t=>{ byCat[t.cat] = (byCat[t.cat]||0)+t.amt; });
   const catData = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([label,value],i)=>({label, value, color: FIN_COLORS[i%FIN_COLORS.length]}));
   document.getElementById('f-donut').innerHTML = donut(catData);
   document.getElementById('f-legend').innerHTML = catData.length ? legendHTML(catData) : '<div class="empty" style="padding:0">Нет расходов</div>';
+
   const budgetCats = [...new Set([...Object.keys(state.budgets), ...Object.keys(byCat)])];
   const budgetsEl = document.getElementById('f-budgets');
   if(!budgetCats.length){
@@ -872,6 +946,7 @@ function renderFin(){
       </div>`;
     }).join('');
   }
+
   const list = document.getElementById('f-list');
   if(!monthTx.length){ list.innerHTML = '<div class="empty">Нет операций в этом месяце</div>'; return; }
   const sorted = [...monthTx].sort((a,b)=> b.date.localeCompare(a.date));
@@ -893,6 +968,7 @@ function renderFin(){
   
   renderPiggybanks();
 }
+
 /* ================= BACKUP ================= */
 function exportData(){
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
@@ -929,6 +1005,7 @@ function resetAll(){
   save();
   renderAll();
 }
+
 /* ---------- init ---------- */
 function renderAll(){
   renderTasks();
@@ -940,4 +1017,4 @@ document.getElementById('f-input-date').value = todayISO();
 renderAll();
 </script>
 </body>
-          </html>
+</html>
