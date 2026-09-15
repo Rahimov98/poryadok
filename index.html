@@ -205,7 +205,7 @@
       <div class="add-toggle" onclick="toggleForm('t-form')">+ Добавить задачу</div>
       <div class="card" id="t-form" style="display:none">
         <div class="form-row">
-          <input id="t-input-text" placeholder="Что нужно сделать?">
+          <input id="t-input-text" placeholder="Что нужно сделать?" onkeydown="if(event.key==='Enter')submitTask()">
           <div class="two-col">
             <input id="t-input-cat" placeholder="Категория">
             <select id="t-input-prio">
@@ -305,12 +305,21 @@
             </select>
           </div>
           <div class="two-col">
-            <input id="f-input-cat" placeholder="Категория">
+            <input id="f-input-cat" placeholder="Категория" list="f-cat-list" autocomplete="off">
             <input id="f-input-amt" type="number" inputmode="decimal" placeholder="Сумма">
           </div>
+          <datalist id="f-cat-list"></datalist>
           <input id="f-input-note" placeholder="Комментарий (необязательно)">
           <button class="primary" id="f-submit-btn" onclick="submitTx()">Добавить</button>
         </div>
+      </div>
+
+      <div class="toolbar" style="margin-top:2px;">
+        <select id="f-filter-type" onchange="renderFin()">
+          <option value="">Все операции</option>
+          <option value="Доход">Только доходы</option>
+          <option value="Расход">Только расходы</option>
+        </select>
       </div>
 
       <div class="card" id="f-list"></div>
@@ -422,6 +431,7 @@ function switchView(v){
   document.getElementById('view-'+v).classList.add('active');
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
   document.getElementById('viewTitle').textContent = titles[v];
+  try{ localStorage.setItem('poryadok_view', v); }catch(e){}
 }
 function toggleForm(id){
   const el = document.getElementById(id);
@@ -432,7 +442,7 @@ function escapeHTML(s){
 }
 
 /* ---------- charts (vanilla SVG) ---------- */
-function donut(data, size=104){
+function donut(data, size=104, sub=''){
   const total = data.reduce((s,d)=>s+d.value,0);
   const r = size/2 - 10, cx=size/2, cy=size/2, circ = 2*Math.PI*r;
   let offset = 0, arcs = '';
@@ -449,6 +459,7 @@ function donut(data, size=104){
   }
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${arcs}
     <text x="${cx}" y="${cy+5}" text-anchor="middle" fill="#EDF3F0" font-size="15" font-weight="700" font-family="inherit">${total>0? total.toLocaleString('ru-RU'):'—'}</text>
+    ${sub?`<text x="${cx}" y="${cy+23}" text-anchor="middle" fill="#8FB0A4" font-size="10" font-family="inherit">${sub}</text>`:''}
   </svg>`;
 }
 function legendHTML(data){
@@ -512,6 +523,7 @@ function editTask(id){
   document.getElementById('t-form').scrollIntoView({behavior:'smooth', block:'center'});
 }
 function cycleStatus(id){
+  if(navigator.vibrate) navigator.vibrate(12);
   const t = state.tasks.find(x=>x.id===id);
   const wasNotDone = t.status !== 'done';
   t.status = t.status==='todo' ? 'progress' : t.status==='progress' ? 'done' : 'todo';
@@ -526,7 +538,7 @@ function cycleStatus(id){
   }
   save(); renderTasks();
 }
-function delTask(id){ state.tasks = state.tasks.filter(x=>x.id!==id); save(); renderTasks(); }
+function delTask(id){ if(!confirm('Удалить задачу?')) return; state.tasks = state.tasks.filter(x=>x.id!==id); save(); renderTasks(); }
 function toggleExpand(id){
   if(expandedTasks.has(id)) expandedTasks.delete(id); else expandedTasks.add(id);
   renderTasks();
@@ -547,6 +559,7 @@ function toggleSubtask(taskId, subId){
   save(); renderTasks();
 }
 function delSubtask(taskId, subId){
+  if(!confirm('Удалить подзадачу?')) return;
   const t = state.tasks.find(x=>x.id===taskId);
   t.subtasks = t.subtasks.filter(x=>x.id!==subId);
   save(); renderTasks();
@@ -631,6 +644,7 @@ let habitViewDate = new Date();
 
 function shiftHabitMonth(n){
   habitViewDate.setMonth(habitViewDate.getMonth()+n);
+  try{ localStorage.setItem('poryadok_hab_month', isoMonthOf(habitViewDate)); }catch(e){}
   renderHabits();
 }
 function monthMatrix(year, month){
@@ -649,8 +663,9 @@ function addHabit(){
   document.getElementById('h-input-name').value='';
   save(); renderHabits();
 }
-function delHabit(id){ state.habits = state.habits.filter(h=>h.id!==id); save(); renderHabits(); }
+function delHabit(id){ if(!confirm('Удалить привычку? Вся история будет стёрта.')) return; state.habits = state.habits.filter(h=>h.id!==id); save(); renderHabits(); }
 function toggleHabitDay(id, iso){
+  if(navigator.vibrate) navigator.vibrate(12);
   const h = state.habits.find(x=>x.id===id);
   const i = h.dates.indexOf(iso);
   if(i>=0) h.dates.splice(i,1); else h.dates.push(iso);
@@ -678,6 +693,7 @@ function addNote(habitId){
   save(); renderHabits();
 }
 function delNote(habitId, date){
+  if(!confirm('Удалить заметку?')) return;
   const h = state.habits.find(x=>x.id===habitId);
   delete h.notes[date];
   save(); renderHabits();
@@ -794,6 +810,7 @@ let editingTxId = null;
 
 function shiftFinMonth(n){
   finViewDate.setMonth(finViewDate.getMonth()+n);
+  try{ localStorage.setItem('poryadok_fin_month', isoMonthOf(finViewDate)); }catch(e){}
   renderFin();
 }
 function txInView(){
@@ -835,7 +852,7 @@ function editTx(id){
   document.getElementById('f-form').style.display='block';
   document.getElementById('f-form').scrollIntoView({behavior:'smooth', block:'center'});
 }
-function delTx(id){ state.tx = state.tx.filter(x=>x.id!==id); save(); renderFin(); }
+function delTx(id){ if(!confirm('Удалить операцию?')) return; state.tx = state.tx.filter(x=>x.id!==id); save(); renderFin(); }
 
 function addBudget(){
   const cat = document.getElementById('b-input-cat').value.trim();
@@ -880,6 +897,12 @@ function withdrawPiggybank(id, amount){
   save(); renderFin();
 }
 function delPiggybank(id){
+  const pb = state.piggybanks.find(x=>x.id===id);
+  if(!pb) return;
+  if(!confirm(`Удалить копилку «${pb.name}»?`)) return;
+  if(pb.saved>0 && confirm(`Вернуть накопленные ${pb.saved.toLocaleString('ru-RU')} ₽ в баланс?`)){
+    state.tx.push({id:Date.now(), date:todayISO(), type:'Доход', cat:'Копилки', amt:pb.saved, note:'Возврат: '+pb.name});
+  }
   state.piggybanks = state.piggybanks.filter(x=>x.id!==id);
   save(); renderFin();
 }
@@ -920,13 +943,20 @@ function renderFin(){
   document.getElementById('f-income').textContent = income.toLocaleString('ru-RU');
   document.getElementById('f-expense').textContent = expense.toLocaleString('ru-RU');
   document.getElementById('f-balance').textContent = (income-expense).toLocaleString('ru-RU');
+  document.getElementById('f-balance').style.color = (income-expense)<0 ? 'var(--coral)' : '';
 
   const byCat = {};
   monthTx.filter(t=>t.type==='Расход').forEach(t=>{ byCat[t.cat] = (byCat[t.cat]||0)+t.amt; });
-  const catData = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([label,value],i)=>({label, value, color: FIN_COLORS[i%FIN_COLORS.length]}));
-  document.getElementById('f-donut').innerHTML = donut(catData);
+  const dl = document.getElementById('f-cat-list');
+  if(dl) dl.innerHTML = [...new Set(state.tx.map(t=>t.cat))].sort().map(c=>`<option value="${escapeHTML(c)}">`).join('');
+  let catData = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([label,value],i)=>({label, value, color: FIN_COLORS[i%FIN_COLORS.length]}));
+  const balance = income - expense;
+  if(balance > 0){
+    catData.push({label:'Остаток', value:balance, color:'#3D6656'});
+  }
+  const pctLeft = income>0 ? Math.max(0, Math.round(balance/income*100)) : 0;
+  document.getElementById('f-donut').innerHTML = donut(catData, 104, income>0 ? `осталось ${pctLeft}%` : '');
   document.getElementById('f-legend').innerHTML = catData.length ? legendHTML(catData) : '<div class="empty" style="padding:0">Нет расходов</div>';
-
   const budgetCats = [...new Set([...Object.keys(state.budgets), ...Object.keys(byCat)])];
   const budgetsEl = document.getElementById('f-budgets');
   if(!budgetCats.length){
@@ -948,8 +978,10 @@ function renderFin(){
   }
 
   const list = document.getElementById('f-list');
-  if(!monthTx.length){ list.innerHTML = '<div class="empty">Нет операций в этом месяце</div>'; return; }
-  const sorted = [...monthTx].sort((a,b)=> b.date.localeCompare(a.date));
+  const typeF = (document.getElementById('f-filter-type')||{value:''}).value;
+  const visibleTx = monthTx.filter(t=>!typeF || t.type===typeF);
+  if(!visibleTx.length){ list.innerHTML = `<div class="empty">${monthTx.length? 'Нет операций выбранного типа' : 'Нет операций в этом месяце'}</div>`; return; }
+  const sorted = [...visibleTx].sort((a,b)=> b.date.localeCompare(a.date));
   list.innerHTML = sorted.map(t=>`
     <div class="item">
       <div class="chk" style="border-color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; font-size:16px;">${t.type==='Доход'?'+':'−'}</div>
@@ -988,6 +1020,7 @@ function importData(evt){
   reader.onload = () => {
     try {
       const parsed = JSON.parse(reader.result);
+      if(!confirm('Заменить текущие данные данными из файла?')) return;
       state = migrate(parsed);
       save();
       renderAll();
@@ -1014,6 +1047,14 @@ function renderAll(){
 }
 document.getElementById('todayLabel').textContent = new Date().toLocaleDateString('ru-RU', {day:'numeric', month:'long'});
 document.getElementById('f-input-date').value = todayISO();
+try{
+  const savedView = localStorage.getItem('poryadok_view');
+  if(savedView && titles[savedView]) switchView(savedView);
+  const savedFin = localStorage.getItem('poryadok_fin_month');
+  if(savedFin){ const p = savedFin.split('-').map(Number); if(p[0] && p[1]) finViewDate = new Date(p[0], p[1]-1, 1); }
+  const savedHab = localStorage.getItem('poryadok_hab_month');
+  if(savedHab){ const p = savedHab.split('-').map(Number); if(p[0] && p[1]) habitViewDate = new Date(p[0], p[1]-1, 1); }
+}catch(e){}
 renderAll();
 </script>
 </body>
