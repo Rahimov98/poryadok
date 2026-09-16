@@ -164,9 +164,38 @@
   nav.tabbar svg{width:21px; height:21px;}
   select{-webkit-appearance:none; appearance:none;}
   .hidden-file{display:none;}
+
+  /* lock screen */
+  #lock-screen{position:fixed; inset:0; z-index:100; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; padding:24px;}
+  #lock-screen .lock-box{width:100%; max-width:320px; text-align:center; animation:fade .25s ease;}
+  #lock-screen .lock-icon{width:72px; height:72px; margin:0 auto 18px; border-radius:22px; background:var(--surface);
+    border:1px solid var(--line); display:flex; align-items:center; justify-content:center;}
+  #lock-screen .lock-icon svg{width:34px; height:34px; stroke:var(--amber);}
+  #lock-screen h2{font-size:19px; margin:0 0 6px; font-weight:700;}
+  #lock-screen p{font-size:13px; color:var(--muted); margin:0 0 18px;}
+  #lock-pass{letter-spacing:8px; text-align:center; font-size:18px; padding:13px;}
+  #lock-error{color:var(--coral); font-size:12px; min-height:18px; margin-top:8px;}
+  .shake{animation:shake .3s ease;}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  .lock-forgot{margin-top:14px; font-size:12px; color:var(--muted); background:none; border:none; text-decoration:underline; font-family:inherit;}
 </style>
 </head>
 <body>
+<!-- LOCK -->
+<div id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+    </div>
+    <h2>Порядок</h2>
+    <p id="lock-sub">Введите пароль</p>
+    <input id="lock-pass" type="password" inputmode="numeric" placeholder="····" onkeydown="if(event.key==='Enter')tryUnlock()">
+    <button class="primary" style="margin-top:10px;" onclick="tryUnlock()">Открыть</button>
+    <div id="lock-error"></div>
+    <button class="lock-forgot" onclick="forgotPassword()">Забыли пароль?</button>
+  </div>
+</div>
 <div id="app">
   <header class="top">
     <h1 id="viewTitle">Задачи</h1>
@@ -327,6 +356,18 @@
 
     <!-- MORE / BACKUP -->
     <section class="view" id="view-more">
+
+      <div class="card">
+        <h2>🔒 Безопасность</h2>
+        <div class="form-row">
+          <input id="cp-current" type="password" placeholder="Текущий пароль">
+          <input id="cp-new" type="password" placeholder="Новый пароль (мин. 4 символа)">
+          <input id="cp-new2" type="password" placeholder="Повторите новый пароль">
+          <button class="primary" onclick="changePassword()">Изменить пароль</button>
+          <div id="cp-msg" style="font-size:12px; min-height:16px;"></div>
+          <button class="ghost" onclick="logoutLock()">🔒 Заблокировать приложение</button>
+        </div>
+      </div>
       <div class="card">
         <h2>Резервная копия</h2>
         <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">Сохрани все данные в файл или восстанови их на другом телефоне.</p>
@@ -1039,11 +1080,72 @@ function resetAll(){
   renderAll();
 }
 
+
+/* ================= LOCK / PASSWORD ================= */
+const PASS_KEY = 'poryadok_pass';
+function getPass(){ return localStorage.getItem(PASS_KEY) || '1111'; }
+function tryUnlock(){
+  const val = document.getElementById('lock-pass').value;
+  if(val === getPass()){
+    if(navigator.vibrate) navigator.vibrate(12);
+    sessionStorage.setItem('poryadok_unlocked', '1');
+    const ls = document.getElementById('lock-screen');
+    ls.style.transition = 'opacity .22s ease';
+    ls.style.opacity = '0';
+    setTimeout(()=> ls.remove(), 230);
+    setTimeout(()=> document.getElementById('t-search').focus(), 300);
+  } else {
+    if(navigator.vibrate) navigator.vibrate([40,60,40]);
+    const box = document.querySelector('#lock-screen .lock-box');
+    const err = document.getElementById('lock-error');
+    box.classList.remove('shake'); void box.offsetWidth;
+    box.classList.add('shake');
+    err.textContent = 'Неверный пароль, попробуйте ещё раз';
+    const inp = document.getElementById('lock-pass');
+    inp.value = ''; inp.focus();
+  }
+}
+function forgotPassword(){
+  if(!confirm('Без пароля восстановить данные нельзя. Сбросить пароль И все данные приложения?')) return;
+  if(!confirm('Все задачи, привычки и финансы будут удалены безвозвратно. Продолжить?')) return;
+  localStorage.removeItem(PASS_KEY);
+  resetAll();
+  sessionStorage.setItem('poryadok_unlocked', '1');
+  const ls = document.getElementById('lock-screen');
+  if(ls){ ls.style.transition='opacity .22s ease'; ls.style.opacity='0'; setTimeout(()=> ls.remove(), 230); }
+}
+function changePassword(){
+  const cur = document.getElementById('cp-current').value;
+  const nw  = document.getElementById('cp-new').value;
+  const nw2 = document.getElementById('cp-new2').value;
+  const msg = document.getElementById('cp-msg');
+  if(cur !== getPass()){ msg.style.color = 'var(--coral)'; msg.textContent = 'Текущий пароль неверный'; return; }
+  if(!nw || nw.length < 4){ msg.style.color = 'var(--coral)'; msg.textContent = 'Новый пароль — минимум 4 символа'; return; }
+  if(nw !== nw2){ msg.style.color = 'var(--coral)'; msg.textContent = 'Пароли не совпадают'; return; }
+  localStorage.setItem(PASS_KEY, nw);
+  document.getElementById('cp-current').value = '';
+  document.getElementById('cp-new').value = '';
+  document.getElementById('cp-new2').value = '';
+  msg.style.color = 'var(--mint)';
+  msg.textContent = 'Пароль изменён ✓';
+  setTimeout(()=> msg.textContent = '', 3000);
+}
+function logoutLock(){
+  sessionStorage.removeItem('poryadok_unlocked');
+  location.reload();
+}
+
 /* ---------- init ---------- */
 function renderAll(){
   renderTasks();
   renderHabits();
   renderFin();
+}
+if(sessionStorage.getItem('poryadok_unlocked') === '1'){
+  const ls0 = document.getElementById('lock-screen');
+  if(ls0) ls0.remove();
+} else {
+  setTimeout(()=> document.getElementById('lock-pass').focus(), 150);
 }
 document.getElementById('todayLabel').textContent = new Date().toLocaleDateString('ru-RU', {day:'numeric', month:'long'});
 document.getElementById('f-input-date').value = todayISO();
