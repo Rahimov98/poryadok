@@ -142,6 +142,22 @@
   .budget-top .amt{color:var(--muted);}
   .budget-top input{width:78px; padding:6px 8px; font-size:12px; text-align:right;}
 
+  /* monthly report */
+  .rep-row{display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .rep-row:last-of-type{border-bottom:none;}
+  .rep-row .k{color:var(--muted);}
+  .rep-row .v{font-weight:600; text-align:right;}
+  .rep-row.total{font-size:16px; font-weight:700;}
+  .rep-row.total .k{color:var(--text);}
+  .rep-sub{font-size:11px; color:var(--muted); font-weight:400; display:block;}
+  .rep-divider{height:1px; background:var(--line); margin:6px 0 2px;}
+  .rep-table{width:100%; border-collapse:collapse; font-size:12px; margin:8px 0 10px;}
+  .rep-table th{color:var(--muted); font-weight:500; text-align:right; padding:6px 4px;}
+  .rep-table td{padding:8px 4px; text-align:right; border-top:1px solid var(--line);}
+  .rep-table th:first-child, .rep-table td:first-child{text-align:left;}
+  .rep-table tr.cur td{color:var(--amber); font-weight:700;}
+  .rep-table tbody tr{cursor:pointer;}
+
   /* piggybanks */
   .pb-row{padding:12px 0; border-bottom:1px solid var(--line);}
   .pb-row:last-child{border-bottom:none;}
@@ -292,8 +308,10 @@
       <div class="stats">
         <div class="stat"><div class="n" id="f-income" style="color:var(--mint)">0</div><div class="l">доходы</div></div>
         <div class="stat"><div class="n" id="f-expense" style="color:var(--coral)">0</div><div class="l">расходы</div></div>
-        <div class="stat"><div class="n" id="f-balance">0</div><div class="l">баланс</div></div>
+        <div class="stat"><div class="n" id="f-balance">0</div><div class="l">остаток с переносом</div></div>
       </div>
+
+      <div class="card" id="f-report"></div>
 
       <div class="card">
         <h2>Расходы по категориям</h2>
@@ -947,6 +965,129 @@ function delPiggybank(id){
   state.piggybanks = state.piggybanks.filter(x=>x.id!==id);
   save(); renderFin();
 }
+/* ---------- monthly report & carry-over ---------- */
+function finMonthTotals(ym){
+  let inc=0, exp=0, spend=0, pigOut=0, pigIn=0;
+  state.tx.forEach(t=>{
+    if(!t.date || t.date.slice(0,7)!==ym) return;
+    if(t.type==='Доход'){ inc+=t.amt; if(t.cat==='Копилки') pigIn+=t.amt; }
+    else if(t.type==='Расход'){ exp+=t.amt; if(t.cat==='Копилки') pigOut+=t.amt; else spend+=t.amt; }
+  });
+  return {inc, exp, spend, pig: pigOut-pigIn};
+}
+// остаток на начало месяца = все доходы минус все расходы за ВСЕ прошлые месяцы
+function finOpeningBalance(ym){
+  let b=0;
+  state.tx.forEach(t=>{
+    if(!t.date || t.date.slice(0,7)>=ym) return;
+    if(t.type==='Доход') b+=t.amt; else if(t.type==='Расход') b-=t.amt;
+  });
+  return b;
+}
+function fmtN(n){ return (Math.round(n*100)/100).toLocaleString('ru-RU'); }
+function fmtSigned(n){ return (n>0?'+':(n<0?'−':''))+fmtN(Math.abs(n)); }
+let lastReportText = '';
+
+function goToFinMonth(ym){
+  const p = ym.split('-').map(Number);
+  finViewDate = new Date(p[0], p[1]-1, 1);
+  try{ localStorage.setItem('poryadok_fin_month', ym); }catch(e){}
+  renderFin();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function renderReport(){
+  const el = document.getElementById('f-report');
+  if(!el) return;
+  const y = finViewDate.getFullYear(), m = finViewDate.getMonth();
+  const ym = isoMonthOf(finViewDate);
+  const cur = finMonthTotals(ym);
+  const open = finOpeningBalance(ym);
+  const close = open + cur.inc - cur.exp;
+  const prev = finMonthTotals(isoMonthOf(new Date(y, m-1, 1)));
+
+  // дни для среднего расхода
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  let days = null;
+  if(y===now.getFullYear() && m===now.getMonth()) days = now.getDate();
+  else if(new Date(y, m, 1) < thisMonthStart) days = new Date(y, m+1, 0).getDate();
+  const avg = days ? cur.spend/days : null;
+
+  // крупнейшая категория (без копилок)
+  const byCat = {};
+  state.tx.forEach(t=>{
+    if(t.type==='Расход' && t.cat!=='Копилки' && t.date && t.date.slice(0,7)===ym) byCat[t.cat]=(byCat[t.cat]||0)+t.amt;
+  });
+  const top = Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0];
+
+  // к прошлому месяцу
+  let deltaHTML = '—', deltaTxt = '—';
+  if(prev.spend>0){
+    const d = Math.round((cur.spend-prev.spend)/prev.spend*100);
+    deltaTxt = (d>0?'+':'')+d+'%';
+    deltaHTML = `<span style="color:${d>0?'var(--coral)':'var(--mint)'}">${d>0?'▲':(d<0?'▼':'')} ${deltaTxt}</span>`;
+  }
+  const kept = cur.inc>0 ? Math.round((cur.inc-cur.exp)/cur.inc*100)+'%' : '—';
+  const colorOf = n => n<0 ? 'style="color:var(--coral)"' : '';
+
+  // таблица последних 6 месяцев
+  const rows = [];
+  for(let i=5;i>=0;i--){
+    const d = new Date(y, m-i, 1);
+    const k = isoMonthOf(d);
+    const t = finMonthTotals(k);
+    const c = finOpeningBalance(k) + t.inc - t.exp;
+    const lbl = d.toLocaleDateString('ru-RU',{month:'short'}).replace('.','') + " '" + String(d.getFullYear()).slice(2);
+    rows.push({k, lbl, inc:t.inc, exp:t.exp, close:c, isCur:k===ym});
+  }
+  const tableHTML = `<table class="rep-table">
+    <thead><tr><th>Месяц</th><th>Доход</th><th>Расход</th><th>Остаток</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr class="${r.isCur?'cur':''}" onclick="goToFinMonth('${r.k}')">
+      <td>${r.lbl}</td><td>${fmtN(r.inc)}</td><td>${fmtN(r.exp)}</td>
+      <td ${r.close<0?'style="color:var(--coral)"':''}>${fmtN(r.close)}</td></tr>`).join('')}</tbody></table>`;
+
+  el.innerHTML = `
+    <div class="card-row"><h2>📊 Отчёт за ${monthLabel(finViewDate)}</h2></div>
+    <div class="rep-row"><span class="k">Остаток с прошлых месяцев</span><span class="v" ${colorOf(open)}>${fmtN(open)}</span></div>
+    <div class="rep-row"><span class="k">Доходы</span><span class="v" style="color:var(--mint)">${fmtSigned(cur.inc)}</span></div>
+    <div class="rep-row"><span class="k">Расходы${cur.pig!==0?`<span class="rep-sub">в т.ч. в копилки: ${fmtN(cur.pig)}</span>`:''}</span><span class="v" style="color:var(--coral)">${cur.exp? '−'+fmtN(cur.exp) : '0'}</span></div>
+    <div class="rep-row total"><span class="k">Остаток на конец месяца</span><span class="v" ${colorOf(close)}>${fmtN(close)}</span></div>
+    <div class="rep-divider"></div>
+    <div class="rep-row"><span class="k">Траты к прошлому месяцу</span><span class="v">${deltaHTML}</span></div>
+    <div class="rep-row"><span class="k">Средний расход в день</span><span class="v">${avg===null?'—':fmtN(avg)}</span></div>
+    <div class="rep-row"><span class="k">Осталось от доходов месяца</span><span class="v">${kept}</span></div>
+    <div class="rep-row"><span class="k">Больше всего потрачено</span><span class="v">${top?escapeHTML(top[0])+' · '+fmtN(top[1]):'—'}</span></div>
+    <div class="rep-divider"></div>
+    <div style="font-size:12px; color:var(--muted); margin-top:8px;">Последние 6 месяцев (нажми на строку, чтобы открыть)</div>
+    ${tableHTML}
+    <button class="ghost" onclick="copyReport(this)">Скопировать отчёт текстом</button>`;
+
+  lastReportText = [
+    `Отчёт за ${monthLabel(finViewDate)}`,
+    `Остаток с прошлых месяцев: ${fmtN(open)}`,
+    `Доходы: ${fmtSigned(cur.inc)}`,
+    `Расходы: ${cur.exp? '−'+fmtN(cur.exp) : '0'}`+(cur.pig!==0?` (в т.ч. в копилки: ${fmtN(cur.pig)})`:''),
+    `Остаток на конец месяца: ${fmtN(close)}`,
+    `Траты к прошлому месяцу: ${deltaTxt}`,
+    `Средний расход в день: ${avg===null?'—':fmtN(avg)}`,
+    `Больше всего потрачено: ${top? top[0]+' · '+fmtN(top[1]) : '—'}`
+  ].join('\n');
+}
+function copyReport(btn){
+  const done = ()=>{ if(!btn) return; const old=btn.textContent; btn.textContent='Скопировано ✓'; setTimeout(()=>btn.textContent=old, 1600); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(lastReportText).then(done).catch(()=>fallbackCopy(done));
+  } else fallbackCopy(done);
+}
+function fallbackCopy(done){
+  const ta = document.createElement('textarea');
+  ta.value = lastReportText; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); done(); }catch(e){}
+  document.body.removeChild(ta);
+}
+
 function renderPiggybanks(){
   const pbEl = document.getElementById('f-piggybanks');
   if(!state.piggybanks.length){
@@ -983,8 +1124,10 @@ function renderFin(){
   const expense = monthTx.filter(t=>t.type==='Расход').reduce((s,t)=>s+t.amt,0);
   document.getElementById('f-income').textContent = income.toLocaleString('ru-RU');
   document.getElementById('f-expense').textContent = expense.toLocaleString('ru-RU');
-  document.getElementById('f-balance').textContent = (income-expense).toLocaleString('ru-RU');
-  document.getElementById('f-balance').style.color = (income-expense)<0 ? 'var(--coral)' : '';
+  const carriedBalance = finOpeningBalance(isoMonthOf(finViewDate)) + income - expense;
+  document.getElementById('f-balance').textContent = fmtN(carriedBalance);
+  document.getElementById('f-balance').style.color = carriedBalance<0 ? 'var(--coral)' : '';
+  renderReport();
 
   const byCat = {};
   monthTx.filter(t=>t.type==='Расход').forEach(t=>{ byCat[t.cat] = (byCat[t.cat]||0)+t.amt; });
@@ -1021,7 +1164,7 @@ function renderFin(){
   const list = document.getElementById('f-list');
   const typeF = (document.getElementById('f-filter-type')||{value:''}).value;
   const visibleTx = monthTx.filter(t=>!typeF || t.type===typeF);
-  if(!visibleTx.length){ list.innerHTML = `<div class="empty">${monthTx.length? 'Нет операций выбранного типа' : 'Нет операций в этом месяце'}</div>`; return; }
+  if(!visibleTx.length){ list.innerHTML = `<div class="empty">${monthTx.length? 'Нет операций выбранного типа' : 'Нет операций в этом месяце'}</div>`; renderPiggybanks(); return; }
   const sorted = [...visibleTx].sort((a,b)=> b.date.localeCompare(a.date));
   list.innerHTML = sorted.map(t=>`
     <div class="item">
