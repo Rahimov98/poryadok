@@ -195,6 +195,13 @@
   .shake{animation:shake .3s ease;}
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
   .lock-forgot{margin-top:14px; font-size:12px; color:var(--muted); background:none; border:none; text-decoration:underline; font-family:inherit;}
+  .lock-bio{display:none; align-items:center; justify-content:center; gap:8px; width:100%; margin-bottom:12px;
+    background:var(--surface); border:1px solid var(--line); color:var(--amber); border-radius:12px; padding:12px; font-size:14px; font-family:inherit;}
+  .lock-bio svg{width:20px; height:20px;}
+  .lock-or{display:none; font-size:11px; color:var(--muted); margin:2px 0 10px;}
+  .bio-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid var(--line); margin-top:4px;}
+  .bio-row .t{font-size:13px;}
+  .bio-row .s{font-size:11px; color:var(--muted);}
 </style>
 </head>
 <body>
@@ -206,6 +213,11 @@
     </div>
     <h2>Порядок</h2>
     <p id="lock-sub">Введите пароль</p>
+    <button id="lock-bio-btn" class="lock-bio" onclick="tryBiometricUnlock()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10v2a5 5 0 01-5 5"/><path d="M12 6a6 6 0 016 6c0 2-.5 4-1.5 5.5"/><path d="M8 20a9 9 0 001.5-5V9a2.5 2.5 0 015 0"/><path d="M4 15.5A10 10 0 004.5 9"/><path d="M12 2a10 10 0 00-8.5 4.7"/></svg>
+      <span>Войти по отпечатку</span>
+    </button>
+    <div class="lock-or" id="lock-or">или введите пароль</div>
     <input id="lock-pass" type="password" inputmode="numeric" placeholder="····" onkeydown="if(event.key==='Enter')tryUnlock()">
     <button class="primary" style="margin-top:10px;" onclick="tryUnlock()">Открыть</button>
     <div id="lock-error"></div>
@@ -384,6 +396,13 @@
           <button class="primary" onclick="changePassword()">Изменить пароль</button>
           <div id="cp-msg" style="font-size:12px; min-height:16px;"></div>
           <button class="ghost" onclick="logoutLock()">🔒 Заблокировать приложение</button>
+          <div class="bio-row" id="bio-row" style="display:none;">
+            <div>
+              <div class="t">👆 Вход по отпечатку / Face ID</div>
+              <div class="s" id="bio-status">не настроен</div>
+            </div>
+            <button class="ghost" id="bio-toggle-btn" onclick="toggleBiometric()">Включить</button>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -1248,47 +1267,63 @@ function tryUnlock(){
     inp.value = ''; inp.focus();
   }
 }
-function forgotPassword(){
-  if(!confirm('Без пароля восстановить данные нельзя. Сбросить пароль И все данные приложения?')) return;
-  if(!confirm('Все задачи, привычки и финансы будут удалены безвозвратно. Продолжить?')) return;
-  localStorage.removeItem(PASS_KEY);
-  resetAll();
-  sessionStorage.setItem('poryadok_unlocked', '1');
-  const ls = document.getElementById('lock-screen');
-  if(ls){ ls.style.transition='opacity .22s ease'; ls.style.opacity='0'; setTimeout(()=> ls.remove(), 230); }
-}
-function changePassword(){
-  const cur = document.getElementById('cp-current').value;
-  const nw  = document.getElementById('cp-new').value;
-  const nw2 = document.getElementById('cp-new2').value;
-  const msg = document.getElementById('cp-msg');
-  if(cur !== getPass()){ msg.style.color = 'var(--coral)'; msg.textContent = 'Текущий пароль неверный'; return; }
-  if(!nw || nw.length < 4){ msg.style.color = 'var(--coral)'; msg.textContent = 'Новый пароль — минимум 4 символа'; return; }
-  if(nw !== nw2){ msg.style.color = 'var(--coral)'; msg.textContent = 'Пароли не совпадают'; return; }
-  localStorage.setItem(PASS_KEY, nw);
-  document.getElementById('cp-current').value = '';
-  document.getElementById('cp-new').value = '';
-  document.getElementById('cp-new2').value = '';
-  msg.style.color = 'var(--mint)';
-  msg.textContent = 'Пароль изменён ✓';
-  setTimeout(()=> msg.textContent = '', 3000);
-}
-function logoutLock(){
-  sessionStorage.removeItem('poryadok_unlocked');
-  location.reload();
-}
 
-/* ---------- init ---------- */
-function renderAll(){
-  renderTasks();
-  renderHabits();
-  renderFin();
+/* ---------- biometric (WebAuthn, device-local) ---------- */
+const BIO_KEY = 'poryadok_bio_cred';
+function bioSupported(){
+  return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
 }
-if(sessionStorage.getItem('poryadok_unlocked') === '1'){
+function bioEnabled(){ return !!localStorage.getItem(BIO_KEY); }
+function b64uEncode(buf){
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function b64uDecode(str){
+  str = str.replace(/-/g,'+').replace(/_/g,'/');
+  while(str.length%4) str += '=';
+  const bin = atob(str);
+  const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return arr.buffer;
+}
+function randBytes(n){ const a=new Uint8Array(n); crypto.getRandomValues(a); return a; }
+
+async function enableBiometric(){
+  if(!bioSupported()){ alert('Биометрия не поддерживается этим браузером/устройством.'); return; }
+  try{
+    let platAvail = true;
+    if(PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable){
+      platAvail = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    }
+    if(!platAvail){ alert('На этом устройстве не найден отпечаток пальца / Face ID.'); return; }
+    const userId = randBytes(16);
+    const cred = await navigator.credentials.create({
+      publicKey:{
+        challenge: randBytes(32),
+        rp:{ name:'Порядок' },
+        user:{ id:userId, name:'poryadok-user', displayName:'Порядок' },
+        pubKeyCredParams:[{type:'public-key', alg:-7},{type:'public-key', alg:-257}],
+        authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required' },
+        timeout:60000
+      }
+    });
+    if(!cred) throw new Error('no credential');
+    localStorage.setItem(BIO_KEY, b64uEncode(cred.rawId));
+    updateBioUI();
+    if(navigator.vibrate) navigator.vibrate(12);
+  }catch(e){
+    console.error(e);
+    alert('Не удалось включить вход по отпечатку. Попробуйте ещё раз.');
+  }
+}
+m('poryadok_unlocked') === '1'){
   const ls0 = document.getElementById('lock-screen');
   if(ls0) ls0.remove();
 } else {
-  setTimeout(()=> document.getElementById('lock-pass').focus(), 150);
+  if(bioSupported() && bioEnabled()){
+    setTimeout(()=> tryBiometricUnlock(), 350);
+  } else {
+    setTimeout(()=> document.getElementById('lock-pass').focus(), 150);
+  }
 }
 document.getElementById('todayLabel').textContent = new Date().toLocaleDateString('ru-RU', {day:'numeric', month:'long'});
 document.getElementById('f-input-date').value = todayISO();
