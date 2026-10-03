@@ -396,6 +396,21 @@
           <button class="primary" onclick="changePassword()">Изменить пароль</button>
           <div id="cp-msg" style="font-size:12px; min-height:16px;"></div>
           <button class="ghost" onclick="logoutLock()">🔒 Заблокировать приложение</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>🆘 Суперкод (запасной вход)</h2>
+        <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">Отдельный код, который открывает приложение вместо пароля, если вы забыли пароль. Ничего не удаляет и не сбрасывает.</p>
+        <p id="sc-status" style="font-size:12px; margin:0 0 10px;"></p>
+        <div class="form-row">
+          <input id="sc-new" type="password" inputmode="numeric" placeholder="Новый суперкод (мин. 4 символа)">
+          <button class="primary" onclick="setSuperCode()">Сохранить суперкод</button>
+          <div id="sc-msg" style="font-size:12px; min-height:16px;"></div>
+          <button class="ghost" id="sc-remove-btn" style="display:none;" onclick="removeSuperCode()">Удалить суперкод</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>👆 Отпечаток / Face ID</h2>
           <div class="bio-row" id="bio-row" style="display:none;">
             <div>
               <div class="t">👆 Вход по отпечатку / Face ID</div>
@@ -403,7 +418,6 @@
             </div>
             <button class="ghost" id="bio-toggle-btn" onclick="toggleBiometric()">Включить</button>
           </div>
-        </div>
       </div>
       <div class="card">
         <h2>Резервная копия</h2>
@@ -1245,10 +1259,39 @@ function resetAll(){
 
 /* ================= LOCK / PASSWORD ================= */
 const PASS_KEY = 'poryadok_pass';
+const SUPER_KEY = 'poryadok_super';
 function getPass(){ return localStorage.getItem(PASS_KEY) || '1111'; }
+function getSuper(){ return localStorage.getItem(SUPER_KEY) || null; }
+function setSuperCode(){
+  const nw = document.getElementById('sc-new').value;
+  const msg = document.getElementById('sc-msg');
+  if(!nw || nw.length < 4){ msg.style.color='var(--coral)'; msg.textContent='Суперкод — минимум 4 символа'; return; }
+  if(nw === getPass()){ msg.style.color='var(--coral)'; msg.textContent='Суперкод не должен совпадать с обычным паролем'; return; }
+  localStorage.setItem(SUPER_KEY, nw);
+  document.getElementById('sc-new').value = '';
+  msg.style.color='var(--mint)'; msg.textContent='Суперкод сохранён ✓';
+  updateSuperUI();
+  setTimeout(()=> msg.textContent='', 3000);
+}
+function removeSuperCode(){
+  if(!confirm('Удалить суперкод? Без него восстановить доступ при забытом пароле можно будет только полным сбросом данных.')) return;
+  localStorage.removeItem(SUPER_KEY);
+  updateSuperUI();
+}
+function updateSuperUI(){
+  const status = document.getElementById('sc-status');
+  const removeBtn = document.getElementById('sc-remove-btn');
+  if(getSuper()){
+    if(status){ status.textContent = 'Суперкод установлен — им можно войти вместо пароля, он ничего не удалит.'; status.style.color='var(--mint)'; }
+    if(removeBtn) removeBtn.style.display = '';
+  } else {
+    if(status){ status.textContent = 'Суперкод не установлен. Если забудете пароль без него — данные восстановить не получится.'; status.style.color='var(--muted)'; }
+    if(removeBtn) removeBtn.style.display = 'none';
+  }
+}
 function tryUnlock(){
   const val = document.getElementById('lock-pass').value;
-  if(val === getPass()){
+  if(val === getPass() || (getSuper() && val === getSuper())){
     if(navigator.vibrate) navigator.vibrate(12);
     sessionStorage.setItem('poryadok_unlocked', '1');
     const ls = document.getElementById('lock-screen');
@@ -1271,7 +1314,8 @@ function tryUnlock(){
 /* ---------- biometric (WebAuthn, device-local) ---------- */
 const BIO_KEY = 'poryadok_bio_cred';
 function bioSupported(){
-  return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+  const secure = (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  return !!(secure && window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
 }
 function bioEnabled(){ return !!localStorage.getItem(BIO_KEY); }
 function b64uEncode(buf){
@@ -1315,15 +1359,112 @@ async function enableBiometric(){
     alert('Не удалось включить вход по отпечатку. Попробуйте ещё раз.');
   }
 }
-m('poryadok_unlocked') === '1'){
+function disableBiometric(){
+  localStorage.removeItem(BIO_KEY);
+  updateBioUI();
+}
+function toggleBiometric(){
+  if(bioEnabled()) disableBiometric(); else enableBiometric();
+}
+function updateBioUI(){
+  const row = document.getElementById('bio-row');
+  const status = document.getElementById('bio-status');
+  const btn = document.getElementById('bio-toggle-btn');
+  const supported = bioSupported();
+  if(row) row.style.display = 'flex';
+  if(!supported){
+    if(status) status.textContent = 'недоступно в этом браузере';
+    if(btn){ btn.style.display = 'none'; }
+  } else if(bioEnabled()){
+    if(status) status.textContent = 'включён на этом устройстве';
+    if(btn){ btn.style.display = ''; btn.textContent = 'Отключить'; btn.style.color = 'var(--coral)'; }
+  } else {
+    if(status) status.textContent = 'не настроен';
+    if(btn){ btn.style.display = ''; btn.textContent = 'Включить'; btn.style.color = ''; }
+  }
+  const bioBtn = document.getElementById('lock-bio-btn');
+  const orDiv = document.getElementById('lock-or');
+  const show = supported && bioEnabled() && document.getElementById('lock-screen');
+  if(bioBtn) bioBtn.style.display = show ? 'flex' : 'none';
+  if(orDiv) orDiv.style.display = show ? 'block' : 'none';
+}
+async function tryBiometricUnlock(){
+  if(!bioEnabled()) return;
+  const credId = localStorage.getItem(BIO_KEY);
+  try{
+    const assertion = await navigator.credentials.get({
+      publicKey:{
+        challenge: randBytes(32),
+        allowCredentials:[{ id: b64uDecode(credId), type:'public-key' }],
+        userVerification:'required',
+        timeout:60000
+      }
+    });
+    if(!assertion) throw new Error('cancelled');
+    if(navigator.vibrate) navigator.vibrate(12);
+    sessionStorage.setItem('poryadok_unlocked', '1');
+    const ls = document.getElementById('lock-screen');
+    if(ls){
+      ls.style.transition = 'opacity .22s ease';
+      ls.style.opacity = '0';
+      setTimeout(()=> ls.remove(), 230);
+    }
+    setTimeout(()=> { const el=document.getElementById('t-search'); if(el) el.focus(); }, 300);
+  }catch(e){
+    console.log('biometric unlock cancelled/failed', e);
+  }
+}
+function forgotPassword(){
+  if(getSuper()){
+    alert('Если вы настраивали суперкод — просто введите его в то же поле вместо пароля, он тоже откроет приложение и ничего не удалит.');
+    return;
+  }
+  if(!confirm('Суперкод не настроен, поэтому без пароля восстановить доступ без потери данных нельзя.\n\nСбросить пароль И ВСЕ данные приложения (задачи, привычки, финансы)?')) return;
+  if(!confirm('Все данные будут удалены безвозвратно. Продолжить?')) return;
+  localStorage.removeItem(PASS_KEY);
+  localStorage.removeItem(SUPER_KEY);
+  localStorage.removeItem(BIO_KEY);
+  resetAll();
+  sessionStorage.setItem('poryadok_unlocked', '1');
+  const ls = document.getElementById('lock-screen');
+  if(ls){ ls.style.transition='opacity .22s ease'; ls.style.opacity='0'; setTimeout(()=> ls.remove(), 230); }
+}
+function changePassword(){
+  const cur = document.getElementById('cp-current').value;
+  const nw  = document.getElementById('cp-new').value;
+  const nw2 = document.getElementById('cp-new2').value;
+  const msg = document.getElementById('cp-msg');
+  if(cur !== getPass()){ msg.style.color = 'var(--coral)'; msg.textContent = 'Текущий пароль неверный'; return; }
+  if(!nw || nw.length < 4){ msg.style.color = 'var(--coral)'; msg.textContent = 'Новый пароль — минимум 4 символа'; return; }
+  if(nw !== nw2){ msg.style.color = 'var(--coral)'; msg.textContent = 'Пароли не совпадают'; return; }
+  localStorage.setItem(PASS_KEY, nw);
+  document.getElementById('cp-current').value = '';
+  document.getElementById('cp-new').value = '';
+  document.getElementById('cp-new2').value = '';
+  msg.style.color = 'var(--mint)';
+  msg.textContent = 'Пароль изменён ✓';
+  setTimeout(()=> msg.textContent = '', 3000);
+}
+function logoutLock(){
+  sessionStorage.removeItem('poryadok_unlocked');
+  location.reload();
+}
+
+/* ---------- init ---------- */
+function renderAll(){
+  renderTasks();
+  renderHabits();
+  renderFin();
+}
+updateBioUI();
+updateSuperUI();
+if(sessionStorage.getItem('poryadok_unlocked') === '1'){
   const ls0 = document.getElementById('lock-screen');
   if(ls0) ls0.remove();
 } else {
-  if(bioSupported() && bioEnabled()){
-    setTimeout(()=> tryBiometricUnlock(), 350);
-  } else {
-    setTimeout(()=> document.getElementById('lock-pass').focus(), 150);
-  }
+  // Биометрию не запускаем автоматически: большинство браузеров требуют реального нажатия
+  // на кнопку (жест пользователя), иначе системное окно отпечатка не появится.
+  setTimeout(()=> { const el=document.getElementById('lock-pass'); if(el) el.focus(); }, 150);
 }
 document.getElementById('todayLabel').textContent = new Date().toLocaleDateString('ru-RU', {day:'numeric', month:'long'});
 document.getElementById('f-input-date').value = todayISO();
