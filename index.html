@@ -208,8 +208,9 @@
   .line-chart svg{width:100%; height:100%; display:block;}
   .trend-delta{font-size:13px; font-weight:600; margin-top:8px; display:flex; align-items:center; gap:6px;}
   .trend-delta.up{color:var(--mint);}
-  .trend-delta.down{color:var(--coral);}
+  .trend-delta.down{color:#FF6B35;}
   .trend-delta.flat{color:var(--muted);}
+  .trend-period.active{background:rgba(242,183,5,.2); border-color:var(--amber); color:var(--amber);}
 
   /* daily backup toast */
   #backup-toast{position:fixed; left:16px; right:16px; bottom:calc(80px + env(safe-area-inset-bottom));
@@ -342,12 +343,20 @@
         <div class="stat"><div class="n" id="f-balance">0</div><div class="l">остаток с переносом</div></div>
       </div>
 
-      <div class="card">
-        <div class="card-row">
-          <h2>📈 Динамика баланса</h2>
+      <div class="card" style="background:#0a1612; border-color:#1a2e28;">
+        <div id="f-trend-header" style="margin-bottom:8px;">
+          <div style="font-size:13px; color:#8FB0A4; margin-bottom:2px;">Баланс</div>
+          <div id="f-trend-price" style="font-size:22px; font-weight:700; color:#EDF3F0;">—</div>
+          <div id="f-trend-delta" class="trend-delta" style="margin-top:4px;"></div>
         </div>
-        <div class="line-chart" id="f-trend-chart"></div>
-        <div class="trend-delta" id="f-trend-delta"></div>
+        <div class="line-chart" id="f-trend-chart" style="height:180px;"></div>
+        <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;" id="f-trend-periods">
+          <button type="button" class="ghost trend-period active" data-days="30" onclick="setTrendPeriod(30)" style="width:auto; padding:6px 12px; font-size:11px;">1M</button>
+          <button type="button" class="ghost trend-period" data-days="90" onclick="setTrendPeriod(90)" style="width:auto; padding:6px 12px; font-size:11px;">3M</button>
+          <button type="button" class="ghost trend-period" data-days="180" onclick="setTrendPeriod(180)" style="width:auto; padding:6px 12px; font-size:11px;">6M</button>
+          <button type="button" class="ghost trend-period" data-days="365" onclick="setTrendPeriod(365)" style="width:auto; padding:6px 12px; font-size:11px;">1Y</button>
+          <button type="button" class="ghost trend-period" data-days="0" onclick="setTrendPeriod(0)" style="width:auto; padding:6px 12px; font-size:11px;">MAX</button>
+        </div>
       </div>
 
       <div class="card" id="f-report"></div>
@@ -1257,94 +1266,178 @@ function renderFin(){
   renderPiggybanks();
 }
 
-/* ================= LINE CHART (stock-like balance trend) ================= */
+/* ================= LINE CHART (stock-like daily balance) ================= */
+let trendPeriodDays = 30; // 0 = MAX
+
+function setTrendPeriod(days){
+  trendPeriodDays = days;
+  document.querySelectorAll('.trend-period').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.days) === days);
+  });
+  renderBalanceTrend();
+}
+
+function buildDailyBalanceSeries(days){
+  // sort all txs by date
+  const txs = [...state.tx].filter(t=>t.date).sort((a,b)=> a.date.localeCompare(b.date) || a.id-b.id);
+  if(!txs.length) return [];
+
+  // running balance from the beginning
+  const byDay = {}; // iso -> net change that day
+  txs.forEach(t=>{
+    const sign = t.type === 'Доход' ? 1 : -1;
+    byDay[t.date] = (byDay[t.date] || 0) + sign * t.amt;
+  });
+
+  const allDates = Object.keys(byDay).sort();
+  const firstDate = allDates[0];
+  const today = todayISO();
+
+  // build continuous daily series from firstDate (or limited by days) to today
+  let startIso = firstDate;
+  if(days > 0){
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    startIso = isoLocal(d);
+    if(startIso < firstDate) startIso = firstDate;
+  }
+
+  // opening balance before startIso
+  let bal = 0;
+  txs.forEach(t=>{
+    if(t.date < startIso){
+      bal += (t.type === 'Доход' ? 1 : -1) * t.amt;
+    }
+  });
+
+  const points = [];
+  let cursor = new Date(startIso + 'T00:00:00');
+  const end = new Date(today + 'T00:00:00');
+  // cap points to ~120 for performance/look
+  const totalDays = Math.max(1, Math.round((end - cursor) / 86400000) + 1);
+  const step = totalDays > 120 ? Math.ceil(totalDays / 120) : 1;
+
+  let dayCount = 0;
+  while(cursor <= end){
+    const iso = isoLocal(cursor);
+    if(byDay[iso] !== undefined) bal += byDay[iso];
+    if(dayCount % step === 0 || iso === today){
+      points.push({ date: iso, value: bal });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+    dayCount++;
+  }
+  // ensure last point is today
+  if(!points.length || points[points.length-1].date !== today){
+    points.push({ date: today, value: bal });
+  }
+  return points;
+}
+
 function renderBalanceTrend(){
   const el = document.getElementById('f-trend-chart');
   const deltaEl = document.getElementById('f-trend-delta');
+  const priceEl = document.getElementById('f-trend-price');
   if(!el) return;
 
-  // last 8 months of closing balance
-  const points = [];
-  const now = new Date();
-  for(let i=7; i>=0; i--){
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    const ym = isoMonthOf(d);
-    const t = finMonthTotals(ym);
-    const close = finOpeningBalance(ym) + t.inc - t.exp;
-    const lbl = d.toLocaleDateString('ru-RU',{month:'short'}).replace('.','');
-    points.push({ym, lbl, value: close});
-  }
+  const points = buildDailyBalanceSeries(trendPeriodDays);
 
-  if(points.every(p=>p.value===0) && state.tx.length===0){
-    el.innerHTML = '<div class="empty" style="padding:30px 0;">Пока нет данных для графика</div>';
+  if(!points.length){
+    el.innerHTML = '<div class="empty" style="padding:40px 0; color:#8FB0A4;">Пока нет операций — график появится после первых доходов/расходов</div>';
     if(deltaEl) deltaEl.innerHTML = '';
+    if(priceEl) priceEl.textContent = '—';
     return;
   }
 
   const vals = points.map(p=>p.value);
-  const minV = Math.min(...vals, 0);
-  const maxV = Math.max(...vals, 0);
-  const range = (maxV - minV) || 1;
-  const W = 320, H = 150, padL = 8, padR = 8, padT = 16, padB = 28;
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  // add small padding so line doesn't touch edges
+  const pad = (maxV - minV) * 0.08 || Math.abs(maxV) * 0.05 || 100;
+  const yMin = minV - pad;
+  const yMax = maxV + pad;
+  const range = (yMax - yMin) || 1;
+
+  const W = 340, H = 170, padL = 4, padR = 4, padT = 10, padB = 22;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
   const coords = points.map((p,i)=>{
-    const x = padL + (i / (points.length-1)) * chartW;
-    const y = padT + chartH - ((p.value - minV) / range) * chartH;
+    const x = padL + (points.length === 1 ? chartW/2 : (i / (points.length-1)) * chartW);
+    const y = padT + chartH - ((p.value - yMin) / range) * chartH;
     return {x, y, ...p};
   });
 
-  // polyline path
   const linePath = coords.map((c,i)=> (i===0?'M':'L') + c.x.toFixed(1) + ',' + c.y.toFixed(1)).join(' ');
-  // area fill under the line
-  const areaPath = linePath + ` L${coords[coords.length-1].x},${padT+chartH} L${coords[0].x},${padT+chartH} Z`;
+  const areaPath = linePath + ` L${coords[coords.length-1].x.toFixed(1)},${(padT+chartH).toFixed(1)} L${coords[0].x.toFixed(1)},${(padT+chartH).toFixed(1)} Z`;
 
-  // zero line if range crosses 0
-  let zeroLine = '';
-  if(minV < 0 && maxV > 0){
-    const zy = padT + chartH - ((0 - minV) / range) * chartH;
-    zeroLine = `<line x1="${padL}" y1="${zy}" x2="${W-padR}" y2="${zy}" stroke="#284A3F" stroke-width="1" stroke-dasharray="4 3"/>`;
-  }
-
-  // last point color based on trend
+  const first = coords[0];
   const last = coords[coords.length-1];
-  const prev = coords[coords.length-2] || last;
-  const isUp = last.value > prev.value;
-  const isDown = last.value < prev.value;
-  const strokeColor = isUp ? '#5FD3BC' : (isDown ? '#E4572E' : '#F2B705');
-  const fillColor = isUp ? 'rgba(95,211,188,0.15)' : (isDown ? 'rgba(228,87,46,0.12)' : 'rgba(242,183,5,0.12)');
+  const diff = last.value - first.value;
+  const pct = first.value !== 0 ? (diff / Math.abs(first.value) * 100) : 0;
+  const isUp = diff > 0;
+  const isDown = diff < 0;
 
-  // dots
-  const dots = coords.map(c=>`<circle cx="${c.x}" cy="${c.y}" r="3.5" fill="${strokeColor}" stroke="#0F231D" stroke-width="1.5"/>`).join('');
+  // stock-style: orange when down (like screenshot), mint when up
+  const strokeColor = isUp ? '#5FD3BC' : (isDown ? '#FF6B35' : '#F2B705');
+  const fillColor = isUp ? 'url(#trendGradUp)' : (isDown ? 'url(#trendGradDown)' : 'url(#trendGradFlat)');
 
-  // month labels
-  const labels = coords.map((c,i)=>{
-    if(i%2!==0 && i!==coords.length-1) return '';
-    return `<text x="${c.x}" y="${H-6}" text-anchor="middle" fill="#8FB0A4" font-size="10" font-family="inherit">${c.lbl}</text>`;
+  // sparse date labels (start, mid, end)
+  const labelIdx = [0];
+  if(coords.length > 2) labelIdx.push(Math.floor(coords.length/2));
+  if(coords.length > 1) labelIdx.push(coords.length-1);
+  const labels = labelIdx.map(i=>{
+    const c = coords[i];
+    const d = c.date;
+    const lbl = d.slice(5).replace('-','.'); // MM.DD
+    return `<text x="${c.x}" y="${H-4}" text-anchor="middle" fill="#5a7a6e" font-size="9" font-family="inherit">${lbl}</text>`;
   }).join('');
 
+  // glow filter + gradient defs
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    ${zeroLine}
+    <defs>
+      <linearGradient id="trendGradUp" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#5FD3BC" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#5FD3BC" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="trendGradDown" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#FF6B35" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="#FF6B35" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="trendGradFlat" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#F2B705" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#F2B705" stop-opacity="0"/>
+      </linearGradient>
+      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="2.5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
     <path d="${areaPath}" fill="${fillColor}"/>
-    <path d="${linePath}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    ${dots}
+    <path d="${linePath}" fill="none" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+    <circle cx="${last.x}" cy="${last.y}" r="4" fill="${strokeColor}" stroke="#0a1612" stroke-width="2"/>
     ${labels}
   </svg>`;
 
-  // delta text
+  if(priceEl){
+    priceEl.textContent = fmtN(last.value) + ' ₽';
+    priceEl.style.color = isDown ? '#FF6B35' : (isUp ? '#5FD3BC' : '#EDF3F0');
+  }
   if(deltaEl){
-    const diff = last.value - prev.value;
-    const pct = prev.value !== 0 ? Math.round(diff / Math.abs(prev.value) * 100) : 0;
-    if(diff > 0){
+    const periodLabel = trendPeriodDays === 0 ? 'за всё время' :
+      (trendPeriodDays === 30 ? 'за месяц' :
+      (trendPeriodDays === 90 ? 'за 3 месяца' :
+      (trendPeriodDays === 180 ? 'за 6 месяцев' : 'за год')));
+    const pctStr = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
+    if(isUp){
       deltaEl.className = 'trend-delta up';
-      deltaEl.innerHTML = `▲ +${fmtN(diff)} (${pct > 0 ? '+'+pct : pct}%) к прошлому месяцу`;
-    } else if(diff < 0){
+      deltaEl.innerHTML = `▲ +${fmtN(diff)} (${pctStr}) ${periodLabel}`;
+    } else if(isDown){
       deltaEl.className = 'trend-delta down';
-      deltaEl.innerHTML = `▼ ${fmtN(diff)} (${pct}%) к прошлому месяцу`;
+      deltaEl.innerHTML = `▼ ${fmtN(diff)} (${pctStr}) ${periodLabel}`;
     } else {
       deltaEl.className = 'trend-delta flat';
-      deltaEl.innerHTML = `— без изменений к прошлому месяцу`;
+      deltaEl.innerHTML = `— без изменений ${periodLabel}`;
     }
   }
 }
