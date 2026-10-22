@@ -154,6 +154,11 @@
   .cat-hide-btn, .col-hide-btn{display:none; margin-top:12px; text-align:center;}
   .cat-card.expanded .cat-hide-btn, .col-card.expanded .col-hide-btn{display:block;}
   .col-header .col-icon{width:36px; height:36px; border-radius:10px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;}
+  .ops-day{font-size:12px; font-weight:600; color:var(--muted); padding:12px 4px 6px; text-transform:capitalize; position:sticky; top:0; background:var(--surface); z-index:1;}
+  .ops-day:first-child{padding-top:4px;}
+  .ops-sum{font-size:11px; color:var(--muted); font-weight:400; margin-left:6px;}
+  .item.new-flash{animation:flashIn .6s ease;}
+  @keyframes flashIn{0%{background:rgba(242,183,5,.25)} 100%{background:transparent}}
 
   /* budgets */
   .budget-row{padding:10px 0; border-bottom:1px solid var(--line);}
@@ -487,10 +492,11 @@
         <div class="col-body">
           <div class="col-body-inner">
             <div class="toolbar" style="margin-top:0;">
-              <select id="f-filter-type" onchange="renderFin()">
-                <option value="">Все операции</option>
-                <option value="Доход">Только доходы</option>
-                <option value="Расход">Только расходы</option>
+              <input id="f-ops-search" placeholder="Поиск..." oninput="renderFin()" style="flex:1.4">
+              <select id="f-filter-type" onchange="renderFin()" style="flex:1">
+                <option value="">Все</option>
+                <option value="Доход">Доходы</option>
+                <option value="Расход">Расходы</option>
               </select>
             </div>
             <div id="f-list"></div>
@@ -1035,17 +1041,30 @@ let finViewDate = new Date();
 let editingTxId = null;
 let catListExpanded = false;
 const colExpanded = { report: false, budget: false, ops: false };
+try {
+  const savedCol = JSON.parse(localStorage.getItem('poryadok_col') || '{}');
+  Object.assign(colExpanded, savedCol);
+  if(localStorage.getItem('poryadok_cat_exp') === '1') catListExpanded = true;
+} catch(e){}
 
 function toggleCatList(){
   catListExpanded = !catListExpanded;
   const card = document.getElementById('f-cat-card');
   if(card) card.classList.toggle('expanded', catListExpanded);
+  try{ localStorage.setItem('poryadok_cat_exp', catListExpanded ? '1' : '0'); }catch(e){}
 }
 function toggleCol(key){
   colExpanded[key] = !colExpanded[key];
   const idMap = { report: 'f-report-card', budget: 'f-budget-card', ops: 'f-ops-card' };
   const card = document.getElementById(idMap[key]);
   if(card) card.classList.toggle('expanded', colExpanded[key]);
+  try{ localStorage.setItem('poryadok_col', JSON.stringify(colExpanded)); }catch(e){}
+}
+function expandOpsList(){
+  colExpanded.ops = true;
+  const card = document.getElementById('f-ops-card');
+  if(card) card.classList.add('expanded');
+  try{ localStorage.setItem('poryadok_col', JSON.stringify(colExpanded)); }catch(e){}
 }
 
 function shiftFinMonth(n){
@@ -1057,6 +1076,7 @@ function txInView(){
   const ym = isoMonthOf(finViewDate);
   return state.tx.filter(t=>t.date.slice(0,7)===ym);
 }
+let lastAddedTxId = null;
 function submitTx(){
   const date = document.getElementById('f-input-date').value || todayISO();
   const type = document.getElementById('f-input-type').value;
@@ -1068,16 +1088,26 @@ function submitTx(){
   if(editingTxId){
     const t = state.tx.find(x=>x.id===editingTxId);
     Object.assign(t, {date, type, cat, amt, note});
+    lastAddedTxId = editingTxId;
     editingTxId = null;
     document.getElementById('f-submit-btn').textContent = 'Добавить';
   } else {
-    state.tx.push({id:Date.now(), date, type, cat, amt, note});
+    const newId = Date.now();
+    state.tx.push({id:newId, date, type, cat, amt, note});
+    lastAddedTxId = newId;
   }
   document.getElementById('f-input-cat').value='';
   document.getElementById('f-input-amt').value='';
   document.getElementById('f-input-note').value='';
   document.getElementById('f-form').style.display='none';
+  expandOpsList();
   save(); renderFin();
+  // scroll to the new/edited operation
+  setTimeout(()=>{
+    const el = document.querySelector('.item.new-flash');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 80);
+  if(navigator.vibrate) navigator.vibrate(10);
 }
 function editTx(id){
   const t = state.tx.find(x=>x.id===id);
@@ -1374,39 +1404,81 @@ function renderFin(){
 
   const list = document.getElementById('f-list');
   const typeF = (document.getElementById('f-filter-type')||{value:''}).value;
-  const visibleTx = monthTx.filter(t=>!typeF || t.type===typeF);
-  // ops subtitle
+  const searchQ = ((document.getElementById('f-ops-search')||{}).value || '').trim().toLowerCase();
+  let visibleTx = monthTx.filter(t=>!typeF || t.type===typeF);
+  if(searchQ){
+    visibleTx = visibleTx.filter(t =>
+      (t.cat||'').toLowerCase().includes(searchQ) ||
+      (t.note||'').toLowerCase().includes(searchQ) ||
+      String(t.amt).includes(searchQ)
+    );
+  }
+  // newest first: date DESC, then id DESC
+  visibleTx = [...visibleTx].sort((a,b)=>{
+    const d = b.date.localeCompare(a.date);
+    return d !== 0 ? d : (b.id - a.id);
+  });
+
+  const visSum = visibleTx.reduce((s,t)=> s + (t.type==='Доход' ? t.amt : -t.amt), 0);
   const opsSub = document.getElementById('f-ops-sub');
   if(opsSub){
-    opsSub.textContent = monthTx.length
-      ? `${monthTx.length} операций в этом месяце`
-      : 'Нет операций в этом месяце';
+    if(!monthTx.length) opsSub.textContent = 'Нет операций в этом месяце';
+    else if(searchQ || typeF) opsSub.textContent = `${visibleTx.length} найдено · ${visSum>=0?'+':''}${fmtN(visSum)}`;
+    else opsSub.textContent = `${monthTx.length} операций · новые сверху`;
   }
   const opsCard = document.getElementById('f-ops-card');
   if(opsCard) opsCard.classList.toggle('expanded', colExpanded.ops);
 
+  if(!list){ renderPiggybanks(); return; }
   if(!visibleTx.length){
-    if(list) list.innerHTML = `<div class="empty">${monthTx.length? 'Нет операций выбранного типа' : 'Нет операций в этом месяце'}</div>`;
+    list.innerHTML = `<div class="empty">${monthTx.length? (searchQ||typeF ? 'Ничего не найдено' : 'Нет операций выбранного типа') : 'Нет операций в этом месяце'}</div>`;
     renderPiggybanks();
     return;
   }
-  const sorted = [...visibleTx].sort((a,b)=> b.date.localeCompare(a.date));
-  list.innerHTML = sorted.map(t=>`
-    <div class="item">
-      <div class="chk" style="border-color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; font-size:16px;">${t.type==='Доход'?'+':'−'}</div>
-      <div class="body">
-        <div class="title">${escapeHTML(t.cat)} ${t.note?'· '+escapeHTML(t.note):''}</div>
-        <div class="meta"><span class="tag">${t.date}</span></div>
-      </div>
-      <div class="body" style="flex:none; text-align:right;">
-        <div class="title" style="color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}">${t.type==='Доход'?'+':'−'}${t.amt.toLocaleString('ru-RU')}</div>
-      </div>
-      <div class="row-actions">
-        <div class="icon-btn edit" onclick="editTx(${t.id})">✎</div>
-        <div class="icon-btn" onclick="delTx(${t.id})">✕</div>
-      </div>
-    </div>`).join('');
-  
+
+  // group by date (newest days first)
+  const groups = {};
+  visibleTx.forEach(t=>{
+    if(!groups[t.date]) groups[t.date] = [];
+    groups[t.date].push(t);
+  });
+  const dayOrder = Object.keys(groups).sort((a,b)=> b.localeCompare(a));
+  const today = todayISO();
+  const yesterday = (()=>{ const d=new Date(); d.setDate(d.getDate()-1); return isoLocal(d); })();
+
+  function dayLabel(iso){
+    if(iso === today) return 'Сегодня';
+    if(iso === yesterday) return 'Вчера';
+    try{
+      return new Date(iso+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short', day:'numeric', month:'long'});
+    }catch(e){ return iso; }
+  }
+
+  list.innerHTML = dayOrder.map(day=>{
+    const items = groups[day];
+    const daySum = items.reduce((s,t)=> s + (t.type==='Доход' ? t.amt : -t.amt), 0);
+    const rows = items.map(t=>{
+      const isNew = t.id === lastAddedTxId;
+      return `<div class="item${isNew?' new-flash':''}" data-id="${t.id}">
+        <div class="chk" style="border-color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; font-size:16px;">${t.type==='Доход'?'+':'−'}</div>
+        <div class="body">
+          <div class="title">${escapeHTML(t.cat)}${t.note?' · '+escapeHTML(t.note):''}</div>
+          <div class="meta"><span class="tag">${t.type}</span></div>
+        </div>
+        <div class="body" style="flex:none; text-align:right;">
+          <div class="title" style="color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}">${t.type==='Доход'?'+':'−'}${t.amt.toLocaleString('ru-RU')}</div>
+        </div>
+        <div class="row-actions">
+          <div class="icon-btn edit" onclick="editTx(${t.id})">✎</div>
+          <div class="icon-btn" onclick="delTx(${t.id})">✕</div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="ops-day">${dayLabel(day)}<span class="ops-sum">${daySum>=0?'+':''}${fmtN(daySum)}</span></div>${rows}`;
+  }).join('');
+
+  // clear flash marker after one render
+  lastAddedTxId = null;
   renderPiggybanks();
 }
 
