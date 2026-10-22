@@ -134,6 +134,24 @@
   .legend-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
   .legend-val{margin-left:auto; color:var(--muted);}
 
+  /* collapsible categories */
+  .cat-card{padding:0; overflow:hidden;}
+  .cat-header{display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; user-select:none; -webkit-user-select:none;}
+  .cat-header:active{opacity:.92;}
+  .cat-header .cat-donut{flex-shrink:0; width:72px; height:72px;}
+  .cat-header .cat-donut svg{width:72px; height:72px;}
+  .cat-header .cat-info{flex:1; min-width:0;}
+  .cat-header .cat-title{font-size:15px; font-weight:600; margin-bottom:2px;}
+  .cat-header .cat-sub{font-size:12px; color:var(--muted);}
+  .cat-header .cat-chevron{width:22px; height:22px; color:var(--muted); transition:transform .25s ease; flex-shrink:0;}
+  .cat-card.expanded .cat-chevron{transform:rotate(180deg); color:var(--amber);}
+  .cat-body{max-height:0; overflow:hidden; transition:max-height .32s ease;}
+  .cat-card.expanded .cat-body{max-height:1200px;}
+  .cat-body-inner{padding:0 16px 16px; border-top:1px solid var(--line);}
+  .cat-body .chart-wrap{padding-top:14px;}
+  .cat-hide-btn{display:none; margin-top:12px; text-align:center;}
+  .cat-card.expanded .cat-hide-btn{display:block;}
+
   /* budgets */
   .budget-row{padding:10px 0; border-bottom:1px solid var(--line);}
   .budget-row:last-child{border-bottom:none;}
@@ -361,11 +379,25 @@
 
       <div class="card" id="f-report"></div>
 
-      <div class="card">
-        <h2>Расходы по категориям</h2>
-        <div class="chart-wrap">
-          <div id="f-donut"></div>
-          <div class="legend" id="f-legend"></div>
+      <div class="card cat-card" id="f-cat-card">
+        <div class="cat-header" onclick="toggleCatList()">
+          <div class="cat-donut" id="f-donut-mini"></div>
+          <div class="cat-info">
+            <div class="cat-title">Расходы по категориям</div>
+            <div class="cat-sub" id="f-cat-sub">Нажми, чтобы открыть</div>
+          </div>
+          <svg class="cat-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="cat-body">
+          <div class="cat-body-inner">
+            <div class="chart-wrap">
+              <div id="f-donut"></div>
+              <div class="legend" id="f-legend"></div>
+            </div>
+            <div class="cat-hide-btn">
+              <button class="ghost" style="width:auto; padding:8px 18px;" onclick="toggleCatList()">Скрыть список</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -583,22 +615,27 @@ function escapeHTML(s){
 /* ---------- charts (vanilla SVG) ---------- */
 function donut(data, size=104, sub=''){
   const total = data.reduce((s,d)=>s+d.value,0);
-  const r = size/2 - 10, cx=size/2, cy=size/2, circ = 2*Math.PI*r;
+  const strokeW = size < 90 ? 11 : 14;
+  const r = size/2 - (strokeW/2 + 2), cx=size/2, cy=size/2, circ = 2*Math.PI*r;
   let offset = 0, arcs = '';
   if(total <= 0){
-    arcs = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#284A3F" stroke-width="14"/>`;
+    arcs = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#284A3F" stroke-width="${strokeW}"/>`;
   } else {
     data.forEach(d=>{
       if(d.value<=0) return;
       const frac = d.value/total, len = frac*circ;
-      arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${d.color}" stroke-width="14"
+      arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${d.color}" stroke-width="${strokeW}"
         stroke-dasharray="${len} ${circ-len}" stroke-dashoffset="${-offset}" stroke-linecap="butt" transform="rotate(-90 ${cx} ${cy})"/>`;
       offset += len;
     });
   }
+  const mainFs = size < 90 ? 12 : 15;
+  const subFs = size < 90 ? 8 : 10;
+  const mainY = sub ? cy + (size < 90 ? 2 : 5) : cy + 5;
+  const subY = cy + (size < 90 ? 16 : 23);
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${arcs}
-    <text x="${cx}" y="${cy+5}" text-anchor="middle" fill="#EDF3F0" font-size="15" font-weight="700" font-family="inherit">${total>0? total.toLocaleString('ru-RU'):'—'}</text>
-    ${sub?`<text x="${cx}" y="${cy+23}" text-anchor="middle" fill="#8FB0A4" font-size="10" font-family="inherit">${sub}</text>`:''}
+    <text x="${cx}" y="${mainY}" text-anchor="middle" fill="#EDF3F0" font-size="${mainFs}" font-weight="700" font-family="inherit">${total>0? total.toLocaleString('ru-RU'):'—'}</text>
+    ${sub?`<text x="${cx}" y="${subY}" text-anchor="middle" fill="#8FB0A4" font-size="${subFs}" font-family="inherit">${sub}</text>`:''}
   </svg>`;
 }
 function legendHTML(data){
@@ -946,6 +983,13 @@ function renderHabits(){
 const FIN_COLORS = ['#F2B705','#5FD3BC','#B79CED','#E4572E','#6FA8DC','#F29E4C'];
 let finViewDate = new Date();
 let editingTxId = null;
+let catListExpanded = false;
+
+function toggleCatList(){
+  catListExpanded = !catListExpanded;
+  const card = document.getElementById('f-cat-card');
+  if(card) card.classList.toggle('expanded', catListExpanded);
+}
 
 function shiftFinMonth(n){
   finViewDate.setMonth(finViewDate.getMonth()+n);
@@ -1220,8 +1264,24 @@ function renderFin(){
     catData.push({label:'Остаток', value:balance, color:'#3D6656'});
   }
   const pctLeft = income>0 ? Math.max(0, Math.round(balance/income*100)) : 0;
-  document.getElementById('f-donut').innerHTML = donut(catData, 104, income>0 ? `осталось ${pctLeft}%` : '');
-  document.getElementById('f-legend').innerHTML = catData.length ? legendHTML(catData) : '<div class="empty" style="padding:0">Нет расходов</div>';
+  const subText = income>0 ? `осталось ${pctLeft}%` : '';
+  // full size for expanded view
+  const donutEl = document.getElementById('f-donut');
+  if(donutEl) donutEl.innerHTML = donut(catData, 104, subText);
+  const legendEl = document.getElementById('f-legend');
+  if(legendEl) legendEl.innerHTML = catData.length ? legendHTML(catData) : '<div class="empty" style="padding:0">Нет расходов</div>';
+  // mini donut + subtitle for collapsed header
+  const miniEl = document.getElementById('f-donut-mini');
+  if(miniEl) miniEl.innerHTML = donut(catData, 72, '');
+  const subEl = document.getElementById('f-cat-sub');
+  if(subEl){
+    if(!catData.length) subEl.textContent = 'Нет расходов';
+    else if(income>0) subEl.textContent = `осталось ${pctLeft}% · ${catData.filter(d=>d.label!=='Остаток').length} категорий`;
+    else subEl.textContent = `${catData.length} категорий · нажми, чтобы открыть`;
+  }
+  // keep expanded state
+  const card = document.getElementById('f-cat-card');
+  if(card) card.classList.toggle('expanded', catListExpanded);
   const budgetCats = [...new Set([...Object.keys(state.budgets), ...Object.keys(byCat)])];
   const budgetsEl = document.getElementById('f-budgets');
   if(!budgetCats.length){
