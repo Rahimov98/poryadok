@@ -134,23 +134,26 @@
   .legend-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
   .legend-val{margin-left:auto; color:var(--muted);}
 
-  /* collapsible categories */
-  .cat-card{padding:0; overflow:hidden;}
-  .cat-header{display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; user-select:none; -webkit-user-select:none;}
-  .cat-header:active{opacity:.92;}
+  /* collapsible cards (categories, report, budgets, ops) */
+  .cat-card, .col-card{padding:0; overflow:hidden;}
+  .cat-header, .col-header{display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; user-select:none; -webkit-user-select:none;}
+  .cat-header:active, .col-header:active{opacity:.92;}
   .cat-header .cat-donut{flex-shrink:0; width:72px; height:72px;}
   .cat-header .cat-donut svg{width:72px; height:72px;}
-  .cat-header .cat-info{flex:1; min-width:0;}
-  .cat-header .cat-title{font-size:15px; font-weight:600; margin-bottom:2px;}
-  .cat-header .cat-sub{font-size:12px; color:var(--muted);}
-  .cat-header .cat-chevron{width:22px; height:22px; color:var(--muted); transition:transform .25s ease; flex-shrink:0;}
-  .cat-card.expanded .cat-chevron{transform:rotate(180deg); color:var(--amber);}
-  .cat-body{max-height:0; overflow:hidden; transition:max-height .32s ease;}
-  .cat-card.expanded .cat-body{max-height:1200px;}
-  .cat-body-inner{padding:0 16px 16px; border-top:1px solid var(--line);}
+  .cat-header .cat-info, .col-header .col-info{flex:1; min-width:0;}
+  .cat-header .cat-title, .col-header .col-title{font-size:15px; font-weight:600; margin-bottom:2px;}
+  .cat-header .cat-sub, .col-header .col-sub{font-size:12px; color:var(--muted);}
+  .cat-header .cat-chevron, .col-header .col-chevron{width:22px; height:22px; color:var(--muted); transition:transform .25s ease; flex-shrink:0;}
+  .cat-card.expanded .cat-chevron, .col-card.expanded .col-chevron{transform:rotate(180deg); color:var(--amber);}
+  .cat-body, .col-body{max-height:0; overflow:hidden; transition:max-height .35s ease;}
+  .cat-card.expanded .cat-body{max-height:1400px;}
+  .col-card.expanded .col-body{max-height:2000px;}
+  .cat-body-inner, .col-body-inner{padding:0 16px 16px; border-top:1px solid var(--line);}
   .cat-body .chart-wrap{padding-top:14px;}
-  .cat-hide-btn{display:none; margin-top:12px; text-align:center;}
-  .cat-card.expanded .cat-hide-btn{display:block;}
+  .col-body-inner > *:first-child{margin-top:12px;}
+  .cat-hide-btn, .col-hide-btn{display:none; margin-top:12px; text-align:center;}
+  .cat-card.expanded .cat-hide-btn, .col-card.expanded .col-hide-btn{display:block;}
+  .col-header .col-icon{width:36px; height:36px; border-radius:10px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;}
 
   /* budgets */
   .budget-row{padding:10px 0; border-bottom:1px solid var(--line);}
@@ -377,7 +380,24 @@
         </div>
       </div>
 
-      <div class="card" id="f-report"></div>
+      <div class="card col-card" id="f-report-card">
+        <div class="col-header" onclick="toggleCol('report')">
+          <div class="col-icon">📊</div>
+          <div class="col-info">
+            <div class="col-title">Отчёт за месяц</div>
+            <div class="col-sub" id="f-report-sub">Нажми, чтобы открыть</div>
+          </div>
+          <svg class="col-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="col-body">
+          <div class="col-body-inner">
+            <div id="f-report"></div>
+            <div class="col-hide-btn">
+              <button class="ghost" style="width:auto; padding:8px 18px;" onclick="toggleCol('report')">Скрыть отчёт</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="card cat-card" id="f-cat-card">
         <div class="cat-header" onclick="toggleCatList()">
@@ -401,14 +421,28 @@
         </div>
       </div>
 
-      <div class="card">
-        <h2>Лимиты бюджета</h2>
-        <div id="f-budgets"></div>
-        <div class="two-col" style="margin-top:10px;">
-          <input id="b-input-cat" placeholder="Категория">
-          <input id="b-input-limit" type="number" inputmode="decimal" placeholder="Лимит">
+      <div class="card col-card" id="f-budget-card">
+        <div class="col-header" onclick="toggleCol('budget')">
+          <div class="col-icon">🎯</div>
+          <div class="col-info">
+            <div class="col-title">Лимиты бюджета</div>
+            <div class="col-sub" id="f-budget-sub">Нажми, чтобы открыть</div>
+          </div>
+          <svg class="col-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <button class="ghost" style="margin-top:8px;" onclick="addBudget()">+ Добавить лимит</button>
+        <div class="col-body">
+          <div class="col-body-inner">
+            <div id="f-budgets"></div>
+            <div class="two-col" style="margin-top:10px;">
+              <input id="b-input-cat" placeholder="Категория">
+              <input id="b-input-limit" type="number" inputmode="decimal" placeholder="Лимит">
+            </div>
+            <button class="ghost" style="margin-top:8px;" onclick="addBudget()">+ Добавить лимит</button>
+            <div class="col-hide-btn">
+              <button class="ghost" style="width:auto; padding:8px 18px;" onclick="toggleCol('budget')">Скрыть лимиты</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="card">
@@ -441,15 +475,31 @@
         </div>
       </div>
 
-      <div class="toolbar" style="margin-top:2px;">
-        <select id="f-filter-type" onchange="renderFin()">
-          <option value="">Все операции</option>
-          <option value="Доход">Только доходы</option>
-          <option value="Расход">Только расходы</option>
-        </select>
+      <div class="card col-card" id="f-ops-card">
+        <div class="col-header" onclick="toggleCol('ops')">
+          <div class="col-icon">📋</div>
+          <div class="col-info">
+            <div class="col-title">Все операции</div>
+            <div class="col-sub" id="f-ops-sub">Нажми, чтобы открыть</div>
+          </div>
+          <svg class="col-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="col-body">
+          <div class="col-body-inner">
+            <div class="toolbar" style="margin-top:0;">
+              <select id="f-filter-type" onchange="renderFin()">
+                <option value="">Все операции</option>
+                <option value="Доход">Только доходы</option>
+                <option value="Расход">Только расходы</option>
+              </select>
+            </div>
+            <div id="f-list"></div>
+            <div class="col-hide-btn">
+              <button class="ghost" style="width:auto; padding:8px 18px;" onclick="toggleCol('ops')">Скрыть операции</button>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div class="card" id="f-list"></div>
     </section>
 
     <!-- MORE / BACKUP -->
@@ -984,11 +1034,18 @@ const FIN_COLORS = ['#F2B705','#5FD3BC','#B79CED','#E4572E','#6FA8DC','#F29E4C']
 let finViewDate = new Date();
 let editingTxId = null;
 let catListExpanded = false;
+const colExpanded = { report: false, budget: false, ops: false };
 
 function toggleCatList(){
   catListExpanded = !catListExpanded;
   const card = document.getElementById('f-cat-card');
   if(card) card.classList.toggle('expanded', catListExpanded);
+}
+function toggleCol(key){
+  colExpanded[key] = !colExpanded[key];
+  const idMap = { report: 'f-report-card', budget: 'f-budget-card', ops: 'f-ops-card' };
+  const card = document.getElementById(idMap[key]);
+  if(card) card.classList.toggle('expanded', colExpanded[key]);
 }
 
 function shiftFinMonth(n){
@@ -1172,7 +1229,6 @@ function renderReport(){
       <td ${r.close<0?'style="color:var(--coral)"':''}>${fmtN(r.close)}</td></tr>`).join('')}</tbody></table>`;
 
   el.innerHTML = `
-    <div class="card-row"><h2>📊 Отчёт за ${monthLabel(finViewDate)}</h2></div>
     <div class="rep-row"><span class="k">Остаток с прошлых месяцев</span><span class="v" ${colorOf(open)}>${fmtN(open)}</span></div>
     <div class="rep-row"><span class="k">Доходы</span><span class="v" style="color:var(--mint)">${fmtSigned(cur.inc)}</span></div>
     <div class="rep-row"><span class="k">Расходы${cur.pig!==0?`<span class="rep-sub">в т.ч. в копилки: ${fmtN(cur.pig)}</span>`:''}</span><span class="v" style="color:var(--coral)">${cur.exp? '−'+fmtN(cur.exp) : '0'}</span></div>
@@ -1197,6 +1253,12 @@ function renderReport(){
     `Средний расход в день: ${avg===null?'—':fmtN(avg)}`,
     `Больше всего потрачено: ${top? top[0]+' · '+fmtN(top[1]) : '—'}`
   ].join('\n');
+
+  // subtitle + expanded state
+  const sub = document.getElementById('f-report-sub');
+  if(sub) sub.textContent = `${monthLabel(finViewDate)} · остаток ${fmtN(close)}`;
+  const card = document.getElementById('f-report-card');
+  if(card) card.classList.toggle('expanded', colExpanded.report);
 }
 function copyReport(btn){
   const done = ()=>{ if(!btn) return; const old=btn.textContent; btn.textContent='Скопировано ✓'; setTimeout(()=>btn.textContent=old, 1600); };
@@ -1301,11 +1363,33 @@ function renderFin(){
       </div>`;
     }).join('');
   }
+  // budget subtitle + state
+  const budgetSub = document.getElementById('f-budget-sub');
+  if(budgetSub){
+    const limitCount = Object.keys(state.budgets).length;
+    budgetSub.textContent = limitCount ? `${limitCount} лимит${limitCount===1?'':'ов'} · нажми, чтобы открыть` : 'Лимиты ещё не заданы';
+  }
+  const budgetCard = document.getElementById('f-budget-card');
+  if(budgetCard) budgetCard.classList.toggle('expanded', colExpanded.budget);
 
   const list = document.getElementById('f-list');
   const typeF = (document.getElementById('f-filter-type')||{value:''}).value;
   const visibleTx = monthTx.filter(t=>!typeF || t.type===typeF);
-  if(!visibleTx.length){ list.innerHTML = `<div class="empty">${monthTx.length? 'Нет операций выбранного типа' : 'Нет операций в этом месяце'}</div>`; renderPiggybanks(); return; }
+  // ops subtitle
+  const opsSub = document.getElementById('f-ops-sub');
+  if(opsSub){
+    opsSub.textContent = monthTx.length
+      ? `${monthTx.length} операций в этом месяце`
+      : 'Нет операций в этом месяце';
+  }
+  const opsCard = document.getElementById('f-ops-card');
+  if(opsCard) opsCard.classList.toggle('expanded', colExpanded.ops);
+
+  if(!visibleTx.length){
+    if(list) list.innerHTML = `<div class="empty">${monthTx.length? 'Нет операций выбранного типа' : 'Нет операций в этом месяце'}</div>`;
+    renderPiggybanks();
+    return;
+  }
   const sorted = [...visibleTx].sort((a,b)=> b.date.localeCompare(a.date));
   list.innerHTML = sorted.map(t=>`
     <div class="item">
