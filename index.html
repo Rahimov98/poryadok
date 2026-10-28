@@ -145,9 +145,9 @@
   .cat-header .cat-sub, .col-header .col-sub{font-size:12px; color:var(--muted);}
   .cat-header .cat-chevron, .col-header .col-chevron{width:22px; height:22px; color:var(--muted); transition:transform .25s ease; flex-shrink:0;}
   .cat-card.expanded .cat-chevron, .col-card.expanded .col-chevron{transform:rotate(180deg); color:var(--amber);}
-  .cat-body, .col-body{max-height:0; overflow:hidden; transition:max-height .35s ease;}
-  .cat-card.expanded .cat-body{max-height:1400px;}
-  .col-card.expanded .col-body{max-height:2000px;}
+  .cat-body, .col-body{max-height:0; overflow:hidden; transition:max-height .4s ease;}
+  .cat-card.expanded .cat-body{max-height:2000px;}
+  .col-card.expanded .col-body{max-height:12000px;} /* достаточно для длинного списка всех операций */
   .cat-body-inner, .col-body-inner{padding:0 16px 16px; border-top:1px solid var(--line);}
   .cat-body .chart-wrap{padding-top:14px;}
   .col-body-inner > *:first-child{margin-top:12px;}
@@ -1405,7 +1405,8 @@ function renderFin(){
   const list = document.getElementById('f-list');
   const typeF = (document.getElementById('f-filter-type')||{value:''}).value;
   const searchQ = ((document.getElementById('f-ops-search')||{}).value || '').trim().toLowerCase();
-  let visibleTx = monthTx.filter(t=>!typeF || t.type===typeF);
+  // Показываем ВСЕ операции (не только текущего месяца), как в заголовке «Все операции»
+  let visibleTx = state.tx.filter(t => !typeF || t.type === typeF);
   if(searchQ){
     visibleTx = visibleTx.filter(t =>
       (t.cat||'').toLowerCase().includes(searchQ) ||
@@ -1422,16 +1423,16 @@ function renderFin(){
   const visSum = visibleTx.reduce((s,t)=> s + (t.type==='Доход' ? t.amt : -t.amt), 0);
   const opsSub = document.getElementById('f-ops-sub');
   if(opsSub){
-    if(!monthTx.length) opsSub.textContent = 'Нет операций в этом месяце';
+    if(!state.tx.length) opsSub.textContent = 'Нет операций';
     else if(searchQ || typeF) opsSub.textContent = `${visibleTx.length} найдено · ${visSum>=0?'+':''}${fmtN(visSum)}`;
-    else opsSub.textContent = `${monthTx.length} операций · новые сверху`;
+    else opsSub.textContent = `${state.tx.length} операций · все · новые сверху`;
   }
   const opsCard = document.getElementById('f-ops-card');
   if(opsCard) opsCard.classList.toggle('expanded', colExpanded.ops);
 
   if(!list){ renderPiggybanks(); return; }
   if(!visibleTx.length){
-    list.innerHTML = `<div class="empty">${monthTx.length? (searchQ||typeF ? 'Ничего не найдено' : 'Нет операций выбранного типа') : 'Нет операций в этом месяце'}</div>`;
+    list.innerHTML = `<div class="empty">${state.tx.length ? (searchQ||typeF ? 'Ничего не найдено' : 'Нет операций выбранного типа') : 'Нет операций'}</div>`;
     renderPiggybanks();
     return;
   }
@@ -1574,7 +1575,7 @@ function renderBalanceTrend(){
   const yMax = maxV + pad;
   const range = (yMax - yMin) || 1;
 
-  const W = 340, H = 170, padL = 4, padR = 4, padT = 10, padB = 22;
+  const W = 340, H = 170, padL = 22, padR = 22, padT = 10, padB = 22;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
@@ -1598,15 +1599,18 @@ function renderBalanceTrend(){
   const strokeColor = isUp ? '#5FD3BC' : (isDown ? '#FF6B35' : '#F2B705');
   const fillColor = isUp ? 'url(#trendGradUp)' : (isDown ? 'url(#trendGradDown)' : 'url(#trendGradFlat)');
 
-  // sparse date labels (start, mid, end)
+  // sparse date labels (start, mid, end) — anchor edges so text doesn't clip
   const labelIdx = [0];
   if(coords.length > 2) labelIdx.push(Math.floor(coords.length/2));
   if(coords.length > 1) labelIdx.push(coords.length-1);
-  const labels = labelIdx.map(i=>{
+  const labels = labelIdx.map((i, idx)=>{
     const c = coords[i];
     const d = c.date;
     const lbl = d.slice(5).replace('-','.'); // MM.DD
-    return `<text x="${c.x}" y="${H-4}" text-anchor="middle" fill="#5a7a6e" font-size="9" font-family="inherit">${lbl}</text>`;
+    let anchor = 'middle';
+    if(idx === 0) anchor = 'start';
+    else if(idx === labelIdx.length - 1) anchor = 'end';
+    return `<text x="${c.x}" y="${H-4}" text-anchor="${anchor}" fill="#5a7a6e" font-size="9" font-family="inherit">${lbl}</text>`;
   }).join('');
 
   // glow filter + gradient defs
