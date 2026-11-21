@@ -363,6 +363,19 @@
         <button onclick="shiftFinMonth(1)">›</button>
       </div>
 
+      <!-- Accounts (как в Money Manager) -->
+      <div class="card" style="padding:12px 14px; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="font-size:13px; color:var(--muted); font-weight:600;">Счета</div>
+          <div id="f-total-balance" style="font-size:15px; font-weight:700;"></div>
+        </div>
+        <div id="f-accounts"></div>
+        <div class="two-col" style="margin-top:10px; gap:8px;">
+          <input id="acc-input-name" placeholder="Название счёта" style="flex:1.4">
+          <button class="ghost" style="width:auto; padding:10px 12px; white-space:nowrap;" onclick="addAccount()">+ Счёт</button>
+        </div>
+      </div>
+
       <div class="stats">
         <div class="stat"><div class="n" id="f-income" style="color:var(--mint)">0</div><div class="l">доходы</div></div>
         <div class="stat"><div class="n" id="f-expense" style="color:var(--coral)">0</div><div class="l">расходы</div></div>
@@ -465,12 +478,17 @@
         <div class="form-row">
           <div class="two-col">
             <input id="f-input-date" type="date">
-            <select id="f-input-type">
+            <select id="f-input-type" onchange="onTxTypeChange()">
               <option value="Расход">Расход</option>
               <option value="Доход">Доход</option>
+              <option value="Перевод">Перевод</option>
             </select>
           </div>
-          <div class="two-col">
+          <div class="two-col" id="f-acc-row">
+            <select id="f-input-acc"></select>
+            <select id="f-input-to-acc" style="display:none"></select>
+          </div>
+          <div class="two-col" id="f-cat-row">
             <input id="f-input-cat" placeholder="Категория" list="f-cat-list" autocomplete="off">
             <input id="f-input-amt" type="number" inputmode="decimal" placeholder="Сумма">
           </div>
@@ -497,6 +515,7 @@
                 <option value="">Все</option>
                 <option value="Доход">Доходы</option>
                 <option value="Расход">Расходы</option>
+                <option value="Перевод">Переводы</option>
               </select>
             </div>
             <div id="f-list"></div>
@@ -610,9 +629,32 @@ function migrate(s){
   s.habits = (s.habits||[]).map(h=>({
     id:h.id, name:h.name||'', dates:h.dates||[], notes:h.notes||{}, goal:h.goal||5
   }));
-  s.tx = (s.tx||[]).map(t=>({...t}));
   s.budgets = s.budgets || {};
   s.piggybanks = (s.piggybanks||[]).map(p=>({id:p.id, name:p.name||'', goal:p.goal||0, saved:p.saved||0}));
+
+  // Accounts (Money Manager style)
+  if(!s.accounts || !s.accounts.length){
+    s.accounts = [{id:1, name:'Основной счёт', icon:'💳', color:'#5FD3BC', opening:0}];
+  } else {
+    s.accounts = s.accounts.map(a=>({
+      id:a.id, name:a.name||'Счёт', icon:a.icon||'💳', color:a.color||'#5FD3BC', opening: +(a.opening||0)
+    }));
+  }
+  const defaultAccId = s.accounts[0].id;
+
+  s.tx = (s.tx||[]).map(t=>{
+    const base = {
+      id: t.id,
+      date: t.date || todayISO(),
+      type: t.type || 'Расход',
+      cat: t.cat || 'Прочее',
+      amt: +(t.amt||0),
+      note: t.note || '',
+      accountId: t.accountId || defaultAccId,
+      toAccountId: t.toAccountId || null
+    };
+    return base;
+  });
   return s;
 }
 function loadOld(){
@@ -636,9 +678,13 @@ const seed = migrate({
     {id:2, name:'Читать 20 минут', dates:[], goal:5},
     {id:3, name:'Тренировка', dates:[], goal:3}
   ],
+  accounts: [
+    {id:1, name:'Наличные', icon:'💵', color:'#5FD3BC', opening:5000},
+    {id:2, name:'Карта', icon:'💳', color:'#F2B705', opening:25000}
+  ],
   tx: [
-    {id:1, date: todayISO(), type:'Доход', cat:'Зарплата', amt:45000, note:'Аванс'},
-    {id:2, date: todayISO(), type:'Расход', cat:'Продукты', amt:3200, note:'Супермаркет'}
+    {id:1, date: todayISO(), type:'Доход', cat:'Зарплата', amt:45000, note:'Аванс', accountId:2},
+    {id:2, date: todayISO(), type:'Расход', cat:'Продукты', amt:3200, note:'Супермаркет', accountId:1}
   ],
   budgets: {'Продукты': 8000},
   piggybanks: [
@@ -1037,6 +1083,7 @@ function renderHabits(){
 
 /* ================= FINANCE ================= */
 const FIN_COLORS = ['#F2B705','#5FD3BC','#B79CED','#E4572E','#6FA8DC','#F29E4C'];
+const ACC_ICONS = ['💵','💳','🏦','📱','🪙','💼'];
 let finViewDate = new Date();
 let editingTxId = null;
 let catListExpanded = false;
@@ -1046,6 +1093,106 @@ try {
   Object.assign(colExpanded, savedCol);
   if(localStorage.getItem('poryadok_cat_exp') === '1') catListExpanded = true;
 } catch(e){}
+
+/* ---- Accounts helpers ---- */
+function getAccount(id){
+  return (state.accounts||[]).find(a=>a.id===id) || null;
+}
+function accountBalance(accId){
+  const acc = getAccount(accId);
+  if(!acc) return 0;
+  let bal = +(acc.opening||0);
+  (state.tx||[]).forEach(t=>{
+    if(t.type === 'Доход' && t.accountId === accId) bal += t.amt;
+    else if(t.type === 'Расход' && t.accountId === accId) bal -= t.amt;
+    else if(t.type === 'Перевод'){
+      if(t.accountId === accId) bal -= t.amt;          // from
+      if(t.toAccountId === accId) bal += t.amt;        // to
+    }
+  });
+  return bal;
+}
+function totalBalance(){
+  return (state.accounts||[]).reduce((s,a)=> s + accountBalance(a.id), 0);
+}
+function fillAccountSelects(){
+  const opts = (state.accounts||[]).map(a=>
+    `<option value="${a.id}">${a.icon||'💳'} ${escapeHTML(a.name)}</option>`
+  ).join('');
+  const from = document.getElementById('f-input-acc');
+  const to = document.getElementById('f-input-to-acc');
+  if(from){
+    const cur = from.value;
+    from.innerHTML = opts;
+    if(cur && [...from.options].some(o=>o.value===cur)) from.value = cur;
+  }
+  if(to){
+    const cur = to.value;
+    to.innerHTML = opts;
+    if(cur && [...to.options].some(o=>o.value===cur)) to.value = cur;
+  }
+}
+function onTxTypeChange(){
+  const type = document.getElementById('f-input-type').value;
+  const toSel = document.getElementById('f-input-to-acc');
+  const catRow = document.getElementById('f-cat-row');
+  const catInp = document.getElementById('f-input-cat');
+  if(type === 'Перевод'){
+    if(toSel) toSel.style.display = '';
+    if(catInp){ catInp.value = 'Перевод'; catInp.disabled = true; }
+  } else {
+    if(toSel) toSel.style.display = 'none';
+    if(catInp){ catInp.disabled = false; if(catInp.value==='Перевод') catInp.value = ''; }
+  }
+}
+function addAccount(){
+  const name = (document.getElementById('acc-input-name').value||'').trim();
+  if(!name) return;
+  const id = Date.now();
+  const icon = ACC_ICONS[(state.accounts||[]).length % ACC_ICONS.length];
+  const color = FIN_COLORS[(state.accounts||[]).length % FIN_COLORS.length];
+  state.accounts.push({id, name, icon, color, opening:0});
+  document.getElementById('acc-input-name').value = '';
+  save(); renderFin();
+}
+function delAccount(id){
+  if((state.accounts||[]).length <= 1){ alert('Должен остаться хотя бы один счёт'); return; }
+  const hasTx = (state.tx||[]).some(t=> t.accountId===id || t.toAccountId===id);
+  if(hasTx && !confirm('На этом счёте есть операции. Удалить счёт и привязать операции к другому счёту?')) return;
+  const fallback = state.accounts.find(a=>a.id!==id).id;
+  state.tx.forEach(t=>{
+    if(t.accountId===id) t.accountId = fallback;
+    if(t.toAccountId===id) t.toAccountId = fallback;
+  });
+  state.accounts = state.accounts.filter(a=>a.id!==id);
+  save(); renderFin();
+}
+function renderAccounts(){
+  const el = document.getElementById('f-accounts');
+  const totalEl = document.getElementById('f-total-balance');
+  if(!el) return;
+  const total = totalBalance();
+  if(totalEl){
+    totalEl.textContent = fmtN(total) + ' ₽';
+    totalEl.style.color = total < 0 ? 'var(--coral)' : 'var(--mint)';
+  }
+  if(!(state.accounts||[]).length){
+    el.innerHTML = '<div class="empty" style="padding:8px 0;">Нет счетов</div>';
+    return;
+  }
+  el.innerHTML = state.accounts.map(a=>{
+    const bal = accountBalance(a.id);
+    return `<div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line);">
+      <div style="width:36px; height:36px; border-radius:10px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">${a.icon||'💳'}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:14px; font-weight:600;">${escapeHTML(a.name)}</div>
+        <div style="font-size:11px; color:var(--muted);">Счёт</div>
+      </div>
+      <div style="text-align:right; font-weight:700; font-size:15px; color:${bal<0?'var(--coral)':'var(--text)'}">${fmtN(bal)}</div>
+      <div class="icon-btn" onclick="delAccount(${a.id})" style="color:var(--coral);">✕</div>
+    </div>`;
+  }).join('');
+}
 
 function toggleCatList(){
   catListExpanded = !catListExpanded;
@@ -1080,29 +1227,37 @@ let lastAddedTxId = null;
 function submitTx(){
   const date = document.getElementById('f-input-date').value || todayISO();
   const type = document.getElementById('f-input-type').value;
-  const cat = document.getElementById('f-input-cat').value.trim() || 'Прочее';
+  let cat = document.getElementById('f-input-cat').value.trim() || 'Прочее';
   const amt = parseFloat(document.getElementById('f-input-amt').value);
   if(!amt || amt<=0) return;
   const note = document.getElementById('f-input-note').value.trim();
+  const accountId = parseInt(document.getElementById('f-input-acc').value) || (state.accounts[0]&&state.accounts[0].id);
+  let toAccountId = null;
+  if(type === 'Перевод'){
+    cat = 'Перевод';
+    toAccountId = parseInt(document.getElementById('f-input-to-acc').value);
+    if(!toAccountId || toAccountId === accountId){ alert('Выберите другой счёт для перевода'); return; }
+  }
 
   if(editingTxId){
     const t = state.tx.find(x=>x.id===editingTxId);
-    Object.assign(t, {date, type, cat, amt, note});
+    Object.assign(t, {date, type, cat, amt, note, accountId, toAccountId});
     lastAddedTxId = editingTxId;
     editingTxId = null;
     document.getElementById('f-submit-btn').textContent = 'Добавить';
   } else {
     const newId = Date.now();
-    state.tx.push({id:newId, date, type, cat, amt, note});
+    state.tx.push({id:newId, date, type, cat, amt, note, accountId, toAccountId});
     lastAddedTxId = newId;
   }
   document.getElementById('f-input-cat').value='';
   document.getElementById('f-input-amt').value='';
   document.getElementById('f-input-note').value='';
+  document.getElementById('f-input-type').value = 'Расход';
+  onTxTypeChange();
   document.getElementById('f-form').style.display='none';
   expandOpsList();
   save(); renderFin();
-  // scroll to the new/edited operation
   setTimeout(()=>{
     const el = document.querySelector('.item.new-flash');
     if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
@@ -1113,11 +1268,15 @@ function editTx(id){
   const t = state.tx.find(x=>x.id===id);
   if(!t) return;
   editingTxId = id;
+  fillAccountSelects();
   document.getElementById('f-input-date').value = t.date;
   document.getElementById('f-input-type').value = t.type;
   document.getElementById('f-input-cat').value = t.cat;
   document.getElementById('f-input-amt').value = t.amt;
   document.getElementById('f-input-note').value = t.note||'';
+  if(document.getElementById('f-input-acc')) document.getElementById('f-input-acc').value = t.accountId || '';
+  if(document.getElementById('f-input-to-acc') && t.toAccountId) document.getElementById('f-input-to-acc').value = t.toAccountId;
+  onTxTypeChange();
   document.getElementById('f-submit-btn').textContent = 'Сохранить';
   document.getElementById('f-form').style.display='block';
   document.getElementById('f-form').scrollIntoView({behavior:'smooth', block:'center'});
@@ -1154,7 +1313,7 @@ function updatePiggybank(id, amount){
   if(!pb || !amount) return;
   amount = Math.abs(amount);
   pb.saved = Math.max(0, pb.saved + amount);
-  state.tx.push({id:Date.now(), date:todayISO(), type:'Расход', cat:'Копилки', amt:amount, note:pb.name});
+  state.tx.push({id:Date.now(), date:todayISO(), type:'Расход', cat:'Копилки', amt:amount, note:pb.name, accountId:(state.accounts[0]&&state.accounts[0].id)});
   save(); renderFin();
 }
 function withdrawPiggybank(id, amount){
@@ -1163,7 +1322,7 @@ function withdrawPiggybank(id, amount){
   amount = Math.min(Math.abs(amount), pb.saved);
   if(!amount) return;
   pb.saved -= amount;
-  state.tx.push({id:Date.now(), date:todayISO(), type:'Доход', cat:'Копилки', amt:amount, note:'Возврат: '+pb.name});
+  state.tx.push({id:Date.now(), date:todayISO(), type:'Доход', cat:'Копилки', amt:amount, note:'Возврат: '+pb.name, accountId:(state.accounts[0]&&state.accounts[0].id)});
   save(); renderFin();
 }
 function delPiggybank(id){
@@ -1171,7 +1330,7 @@ function delPiggybank(id){
   if(!pb) return;
   if(!confirm(`Удалить копилку «${pb.name}»?`)) return;
   if(pb.saved>0 && confirm(`Вернуть накопленные ${pb.saved.toLocaleString('ru-RU')} ₽ в баланс?`)){
-    state.tx.push({id:Date.now(), date:todayISO(), type:'Доход', cat:'Копилки', amt:pb.saved, note:'Возврат: '+pb.name});
+    state.tx.push({id:Date.now(), date:todayISO(), type:'Доход', cat:'Копилки', amt:pb.saved, note:'Возврат: '+pb.name, accountId:(state.accounts[0]&&state.accounts[0].id)});
   }
   state.piggybanks = state.piggybanks.filter(x=>x.id!==id);
   save(); renderFin();
@@ -1186,9 +1345,9 @@ function finMonthTotals(ym){
   });
   return {inc, exp, spend, pig: pigOut-pigIn};
 }
-// остаток на начало месяца = все доходы минус все расходы за ВСЕ прошлые месяцы
+// остаток на начало месяца = открытия счетов + доходы − расходы за все прошлые месяцы
 function finOpeningBalance(ym){
-  let b=0;
+  let b = (state.accounts||[]).reduce((s,a)=> s + (+(a.opening||0)), 0);
   state.tx.forEach(t=>{
     if(!t.date || t.date.slice(0,7)>=ym) return;
     if(t.type==='Доход') b+=t.amt; else if(t.type==='Расход') b-=t.amt;
@@ -1335,14 +1494,21 @@ function renderPiggybanks(){
 
 function renderFin(){
   document.getElementById('f-month-label').textContent = monthLabel(finViewDate);
+  fillAccountSelects();
+  renderAccounts();
+
   const monthTx = txInView();
+  // Доходы/расходы месяца (переводы не считаем в доходы/расходы)
   const income = monthTx.filter(t=>t.type==='Доход').reduce((s,t)=>s+t.amt,0);
   const expense = monthTx.filter(t=>t.type==='Расход').reduce((s,t)=>s+t.amt,0);
   document.getElementById('f-income').textContent = income.toLocaleString('ru-RU');
   document.getElementById('f-expense').textContent = expense.toLocaleString('ru-RU');
-  const carriedBalance = finOpeningBalance(isoMonthOf(finViewDate)) + income - expense;
+  // Общий остаток = сумма балансов всех счетов
+  const carriedBalance = totalBalance();
   document.getElementById('f-balance').textContent = fmtN(carriedBalance);
   document.getElementById('f-balance').style.color = carriedBalance<0 ? 'var(--coral)' : '';
+  const balLabel = document.getElementById('f-balance').parentElement.querySelector('.l');
+  if(balLabel) balLabel.textContent = 'всего на счетах';
   renderReport();
   renderBalanceTrend();
 
@@ -1457,17 +1623,33 @@ function renderFin(){
 
   list.innerHTML = dayOrder.map(day=>{
     const items = groups[day];
-    const daySum = items.reduce((s,t)=> s + (t.type==='Доход' ? t.amt : -t.amt), 0);
+    // Переводы не влияют на дневной «чистый» итог доходов/расходов
+    const daySum = items.reduce((s,t)=>{
+      if(t.type==='Доход') return s + t.amt;
+      if(t.type==='Расход') return s - t.amt;
+      return s;
+    }, 0);
     const rows = items.map(t=>{
       const isNew = t.id === lastAddedTxId;
+      const acc = getAccount(t.accountId);
+      const toAcc = t.toAccountId ? getAccount(t.toAccountId) : null;
+      let signColor = t.type==='Доход' ? '#5FD3BC' : (t.type==='Перевод' ? '#B79CED' : '#E4572E');
+      let sign = t.type==='Доход' ? '+' : (t.type==='Перевод' ? '⇄' : '−');
+      let titleText = escapeHTML(t.cat);
+      if(t.type==='Перевод' && acc && toAcc){
+        titleText = `${escapeHTML(acc.name)} → ${escapeHTML(toAcc.name)}`;
+      } else if(t.note){
+        titleText += ' · ' + escapeHTML(t.note);
+      }
+      const accTag = t.type!=='Перевод' && acc ? `<span class="tag">${acc.icon||''} ${escapeHTML(acc.name)}</span>` : '';
       return `<div class="item${isNew?' new-flash':''}" data-id="${t.id}">
-        <div class="chk" style="border-color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}; font-size:16px;">${t.type==='Доход'?'+':'−'}</div>
+        <div class="chk" style="border-color:${signColor}; color:${signColor}; font-size:15px;">${sign}</div>
         <div class="body">
-          <div class="title">${escapeHTML(t.cat)}${t.note?' · '+escapeHTML(t.note):''}</div>
-          <div class="meta"><span class="tag">${t.type}</span></div>
+          <div class="title">${titleText}</div>
+          <div class="meta"><span class="tag">${t.type}</span>${accTag}</div>
         </div>
         <div class="body" style="flex:none; text-align:right;">
-          <div class="title" style="color:${t.type==='Доход'?'#5FD3BC':'#E4572E'}">${t.type==='Доход'?'+':'−'}${t.amt.toLocaleString('ru-RU')}</div>
+          <div class="title" style="color:${signColor}">${t.type==='Доход'?'+':(t.type==='Перевод'?'':'−')}${t.amt.toLocaleString('ru-RU')}</div>
         </div>
         <div class="row-actions">
           <div class="icon-btn edit" onclick="editTx(${t.id})">✎</div>
@@ -1499,9 +1681,10 @@ function buildDailyBalanceSeries(days){
   const txs = [...state.tx].filter(t=>t.date).sort((a,b)=> a.date.localeCompare(b.date) || a.id-b.id);
   if(!txs.length) return [];
 
-  // running balance from the beginning
+  // running balance from the beginning (переводы не меняют общий баланс)
   const byDay = {}; // iso -> net change that day
   txs.forEach(t=>{
+    if(t.type === 'Перевод') return;
     const sign = t.type === 'Доход' ? 1 : -1;
     byDay[t.date] = (byDay[t.date] || 0) + sign * t.amt;
   });
@@ -1519,10 +1702,10 @@ function buildDailyBalanceSeries(days){
     if(startIso < firstDate) startIso = firstDate;
   }
 
-  // opening balance before startIso
-  let bal = 0;
+  // opening balance before startIso (+ opening balances of accounts)
+  let bal = (state.accounts||[]).reduce((s,a)=> s + (+(a.opening||0)), 0);
   txs.forEach(t=>{
-    if(t.date < startIso){
+    if(t.date < startIso && t.type !== 'Перевод'){
       bal += (t.type === 'Доход' ? 1 : -1) * t.amt;
     }
   });
